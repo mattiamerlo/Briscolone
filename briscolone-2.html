@@ -1,0 +1,1234 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Briscolone ♠</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js"></script>
+<script type="module">
+  // ══════════════════════════════════════════════════
+  // PASSO 1 — incolla qui la tua configurazione Firebase
+  // ══════════════════════════════════════════════════
+  const FIREBASE_CONFIG = {
+    apiKey:            "AIzaSyA1nCJrQznVXIv0sRh7q_95ynic1H9y55U",
+    authDomain:        "briscolone-breda.firebaseapp.com",
+    projectId:         "briscolone-breda",
+    storageBucket:     "briscolone-breda.firebasestorage.app",
+    messagingSenderId: "100267933362",
+    appId:             "1:100267933362:web:446fe3adc189c38c3d13ab",
+  };
+
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+  import { getFirestore, doc, setDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+
+  const fbApp = initializeApp(FIREBASE_CONFIG);
+  const fbDb  = getFirestore(fbApp);
+  const REF   = doc(fbDb, "briscolone", "database");
+
+  window.__fbSave = async (data) => {
+    try { await setDoc(REF, data); return true; }
+    catch(e) { console.error("Firebase:", e); return false; }
+  };
+  window.__fbListen = (cb) => onSnapshot(REF, snap => { if (snap.exists()) cb(snap.data()); });
+  window.__fbReady = true;
+  window.dispatchEvent(new Event("fbReady"));
+</script>
+</head>
+<body style="margin:0">
+<div id="root"></div>
+<script type="text/babel">
+const { useState, useEffect, useRef } = React;
+
+/* ═══════════════════════════════════════════════════════
+   UTILS
+═══════════════════════════════════════════════════════ */
+const uid = () => Math.random().toString(36).slice(2, 9);
+const todayStr = () => new Date().toLocaleDateString("it-IT");
+
+function calcPoints(type, cappotto, soglia, callerWon) {
+  const isAlone = type === "mano" || type === "carichi";
+  const base = isAlone ? 4 : 2;
+  const sogl = soglia > 80 ? 3 : soglia > 70 ? 2 : 1;
+  const cap = cappotto ? 2 : 1;
+  const mult = sogl * cap;
+  if (callerWon) {
+    return { caller: base * mult, partner: isAlone ? 0 : mult, opponent: -mult };
+  } else {
+    return { caller: -(base * mult), partner: isAlone ? 0 : -mult, opponent: mult };
+  }
+}
+
+function sumPts(pid, games) {
+  return games.reduce((a, g) => a + (g.pm?.[pid] ?? 0), 0);
+}
+
+/* ═══════════════════════════════════════════════════════
+   DESIGN TOKENS
+═══════════════════════════════════════════════════════ */
+const C = {
+  bg: "#080604",
+  surface: "#120e08",
+  surface2: "#1c1510",
+  border: "#2e1f0e",
+  gold: "#c8a45a",
+  goldLight: "#e2c17e",
+  red: "#b53a2f",
+  green: "#2e7d4f",
+  purple: "#7b3fa0",
+  text: "#ede4d3",
+  muted: "#7a6a55",
+};
+
+const card = {
+  background: C.surface,
+  border: `1px solid ${C.border}`,
+  borderRadius: 12,
+  padding: 16,
+};
+
+const btn = {
+  primary: {
+    background: `linear-gradient(135deg, #a07828, ${C.gold})`,
+    color: "#1a0e00", border: "none", borderRadius: 8,
+    padding: "11px 22px", fontWeight: 800, fontSize: 13,
+    cursor: "pointer", fontFamily: "inherit",
+  },
+  ghost: (color = C.gold) => ({
+    background: "transparent", color,
+    border: `1px solid ${color}44`, borderRadius: 8,
+    padding: "9px 16px", fontWeight: 700, fontSize: 12,
+    cursor: "pointer", fontFamily: "inherit", width: "100%",
+  }),
+  danger: {
+    background: "transparent", color: C.red,
+    border: `1px solid ${C.red}44`, borderRadius: 6,
+    padding: "5px 12px", fontWeight: 700, fontSize: 12,
+    cursor: "pointer", fontFamily: "inherit",
+  },
+};
+
+const inp = {
+  background: "#0c0906", border: `1px solid ${C.border}`, borderRadius: 8,
+  color: C.text, padding: "10px 14px", fontSize: 14,
+  outline: "none", fontFamily: "inherit", width: "100%",
+};
+
+const sel = { ...inp };
+
+/* ═══════════════════════════════════════════════════════
+   MICRO COMPONENTS
+═══════════════════════════════════════════════════════ */
+const Pts = ({ v, size = 15 }) => (
+  <span style={{ fontWeight: 800, fontSize: size, color: v > 0 ? C.green : v < 0 ? C.red : C.muted }}>
+    {v > 0 ? "+" : ""}{v}
+  </span>
+);
+
+const Badge = ({ children, color = C.gold }) => (
+  <span style={{
+    background: color + "20", color, border: `1px solid ${color}40`,
+    borderRadius: 4, padding: "2px 7px", fontSize: 11, fontWeight: 700,
+  }}>{children}</span>
+);
+
+/* ═══════════════════════════════════════════════════════
+   DIALOGS  (no window.alert / window.confirm)
+═══════════════════════════════════════════════════════ */
+function Confirm({ title, msg, onOk, onCancel }) {
+  return (
+    <div style={{
+      position: "fixed", inset: 0, background: "#000000cc", zIndex: 9000,
+      display: "flex", alignItems: "center", justifyContent: "center", padding: 20,
+    }}>
+      <div style={{
+        ...card, maxWidth: 320, width: "100%", textAlign: "center",
+        border: `1px solid ${C.gold}`,
+      }}>
+        <div style={{ fontSize: 32, marginBottom: 10 }}>⚠️</div>
+        <div style={{ color: C.gold, fontWeight: 800, fontSize: 16, fontFamily: "'Playfair Display',serif", marginBottom: 8 }}>{title}</div>
+        <div style={{ color: C.text, fontSize: 13, lineHeight: 1.6, marginBottom: 20 }}>{msg}</div>
+        <div style={{ display: "flex", gap: 8 }}>
+          <button onClick={onCancel} style={{ ...btn.ghost(C.muted), flex: 1 }}>Annulla</button>
+          <button onClick={onOk} style={{ ...btn.primary, flex: 1 }}>Conferma</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function Info({ title, lines, onOk }) {
+  return (
+    <div style={{
+      position: "fixed", inset: 0, background: "#000000cc", zIndex: 9000,
+      display: "flex", alignItems: "center", justifyContent: "center", padding: 20,
+    }}>
+      <div style={{
+        ...card, maxWidth: 320, width: "100%", textAlign: "center",
+        border: `1px solid ${C.green}`,
+      }}>
+        <div style={{ fontSize: 32, marginBottom: 10 }}>✅</div>
+        <div style={{ color: C.goldLight, fontWeight: 800, fontSize: 16, fontFamily: "'Playfair Display',serif", marginBottom: 8 }}>{title}</div>
+        <div style={{ textAlign: "left", marginBottom: 20 }}>
+          {lines.map((l, i) => (
+            <div key={i} style={{ color: l.startsWith("─") ? C.muted : C.text, fontSize: 13, padding: "3px 0", borderBottom: i < lines.length - 1 ? `1px solid ${C.border}` : "none" }}>{l}</div>
+          ))}
+        </div>
+        <button onClick={onOk} style={{ ...btn.primary, width: "100%" }}>OK</button>
+      </div>
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════
+   MODAL WRAPPER
+═══════════════════════════════════════════════════════ */
+function Modal({ title, onClose, children }) {
+  return (
+    <div style={{ position: "fixed", inset: 0, background: "#000000bb", zIndex: 5000, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }} onClick={onClose}>
+      <div style={{ ...card, maxWidth: 440, width: "100%", maxHeight: "85vh", overflowY: "auto" }} onClick={e => e.stopPropagation()}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 18 }}>
+          <span style={{ color: C.gold, fontFamily: "'Playfair Display',serif", fontWeight: 700, fontSize: 17 }}>{title}</span>
+          <button onClick={onClose} style={{ background: "none", border: "none", color: C.muted, fontSize: 22, cursor: "pointer", lineHeight: 1 }}>✕</button>
+        </div>
+        {children}
+      </div>
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════
+   RANK LIST
+═══════════════════════════════════════════════════════ */
+function RankList({ rows }) {
+  if (!rows.length) return <div style={{ color: C.muted, textAlign: "center", padding: "30px 0" }}>Nessun dato.</div>;
+  const medals = ["🥇", "🥈", "🥉"];
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
+      {rows.map((r, i) => (
+        <div key={r.id ?? i} style={{
+          display: "flex", alignItems: "center", gap: 12, padding: "10px 14px",
+          background: i === 0 ? "linear-gradient(135deg,#1e1508,#2a1c0c)" : C.surface,
+          border: `1px solid ${i === 0 ? C.gold : C.border}`,
+          borderRadius: 10,
+          boxShadow: i === 0 ? `0 0 18px ${C.gold}18` : "none",
+        }}>
+          <span style={{ fontSize: 18, width: 26, textAlign: "center", flexShrink: 0 }}>{medals[i] ?? `${i + 1}.`}</span>
+          <div style={{ flex: 1 }}>
+            <div style={{ color: C.text, fontWeight: 700, fontSize: 14 }}>{r.name}</div>
+            {r.sub && <div style={{ color: C.muted, fontSize: 11, marginTop: 1 }}>{r.sub}</div>}
+          </div>
+          <Pts v={r.pts} size={16} />
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════
+   PROGRESS BAR
+═══════════════════════════════════════════════════════ */
+function ProgBar({ name, pts, max = 15 }) {
+  const pct = Math.min(100, Math.max(0, (pts / max) * 100));
+  return (
+    <div style={{ marginBottom: 8 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, marginBottom: 3 }}>
+        <span style={{ color: C.text }}>{name}</span>
+        <span style={{ fontWeight: 700, color: pts >= max ? C.green : C.gold }}>{pts}/{max}</span>
+      </div>
+      <div style={{ background: C.border, borderRadius: 4, height: 5, overflow: "hidden" }}>
+        <div style={{
+          height: "100%", borderRadius: 4, width: `${pct}%`,
+          background: pts >= max ? C.green : `linear-gradient(90deg, #8a6228, ${C.gold})`,
+          transition: "width .4s ease",
+        }} />
+      </div>
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════
+   PAGE: CLASSIFICHE
+═══════════════════════════════════════════════════════ */
+function PageClassifiche({ players, allGames, raggioDays, giornoGames, raggi, onChiudiRaggio }) {
+  const [tab, setTab] = useState("raggio");
+
+  // Giornata corrente
+  const giornoRows = players
+    .filter(p => giornoGames.some(g => g.pids.includes(p.id)))
+    .map(p => ({ id: p.id, name: p.name, pts: sumPts(p.id, giornoGames) }))
+    .sort((a, b) => b.pts - a.pts);
+
+  // Raggio corrente
+  const raggioRows = players
+    .map(p => ({
+      id: p.id, name: p.name,
+      pts: raggioDays.reduce((a, d) => a + (d.totals[p.id] ?? 0), 0),
+      sub: `${raggioDays.length} giornate`,
+    }))
+    .filter(r => raggioDays.some(d => r.id in d.totals))
+    .sort((a, b) => b.pts - a.pts);
+
+  // Generale
+  const genRows = players
+    .map(p => {
+      const mg = allGames.filter(g => g.pids.includes(p.id));
+      const won = mg.filter(g => (g.pm?.[p.id] ?? 0) > 0).length;
+      return {
+        id: p.id, name: p.name,
+        pts: sumPts(p.id, allGames),
+        sub: `${mg.length} partite · ${mg.length ? Math.round(won / mg.length * 100) : 0}% win`,
+      };
+    })
+    .filter(r => allGames.some(g => g.pids.includes(r.id)))
+    .sort((a, b) => b.pts - a.pts);
+
+  const TABS = [
+    { id: "giorno", label: "☀️ Oggi" },
+    { id: "raggio", label: "⚡ Raggio" },
+    { id: "generale", label: "🏆 Generale" },
+    { id: "storia", label: "📚 Raggi" },
+  ];
+
+  return (
+    <div>
+      <h2 style={{ color: C.gold, fontFamily: "'Playfair Display',serif", fontSize: 22, marginBottom: 16 }}>Classifiche</h2>
+
+      <div style={{ display: "flex", gap: 6, marginBottom: 18, overflowX: "auto", paddingBottom: 2 }}>
+        {TABS.map(t => (
+          <button key={t.id} onClick={() => setTab(t.id)} style={{
+            padding: "7px 14px", borderRadius: 20, cursor: "pointer", whiteSpace: "nowrap",
+            fontWeight: 700, fontSize: 12, fontFamily: "inherit",
+            background: tab === t.id ? C.gold : "transparent",
+            color: tab === t.id ? "#180e00" : C.muted,
+            border: `1px solid ${tab === t.id ? C.gold : C.border}`,
+          }}>{t.label}</button>
+        ))}
+      </div>
+
+      {tab === "giorno" && (
+        <div>
+          <div style={{ color: C.muted, fontSize: 12, marginBottom: 12 }}>
+            Giornata in corso · {giornoGames.length} partite
+          </div>
+          <RankList rows={giornoRows} />
+        </div>
+      )}
+
+      {tab === "raggio" && (
+        <div>
+          {raggioRows[0]?.pts >= 12 && (
+            <div style={{ background: "#1e1200", border: `1px solid ${C.gold}`, borderRadius: 8, padding: "10px 14px", marginBottom: 12, display: "flex", gap: 10, alignItems: "center" }}>
+              <span style={{ fontSize: 20 }}>⚠️</span>
+              <span style={{ color: C.gold, fontSize: 13, fontWeight: 700 }}>{raggioRows[0].name} è a {raggioRows[0].pts} punti!</span>
+            </div>
+          )}
+          <div style={{ color: C.muted, fontSize: 12, marginBottom: 12 }}>{raggioDays.length} giornate chiuse · soglia 15 punti</div>
+          <RankList rows={raggioRows} />
+          {raggioRows.length > 0 && (
+            <div style={{ ...card, marginTop: 14 }}>
+              <div style={{ color: C.muted, fontSize: 11, marginBottom: 10, letterSpacing: 1 }}>PROGRESSIONE</div>
+              {raggioRows.map(r => <ProgBar key={r.id} name={r.name} pts={r.pts} />)}
+            </div>
+          )}
+          <button onClick={onChiudiRaggio} style={{
+            ...btn.primary, width: "100%", marginTop: 14, padding: 13, fontSize: 14,
+            background: "linear-gradient(135deg, #5a1870, #8e44ad)", color: "#fff",
+          }}>🏁 Chiudi Raggio</button>
+        </div>
+      )}
+
+      {tab === "generale" && (
+        <div>
+          <div style={{ color: C.muted, fontSize: 12, marginBottom: 12 }}>Tutte le partite di sempre</div>
+          <RankList rows={genRows} />
+        </div>
+      )}
+
+      {tab === "storia" && (
+        <div>
+          <div style={{ color: C.muted, fontSize: 12, marginBottom: 12 }}>{raggi.length} raggi completati</div>
+          {raggi.length === 0 && <div style={{ color: C.muted, textAlign: "center", padding: 30 }}>Nessun raggio completato.</div>}
+          {[...raggi].reverse().map((r, i) => (
+            <div key={r.id} style={{ ...card, marginBottom: 10 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+                <span style={{ color: C.gold, fontWeight: 700 }}>Raggio #{raggi.length - i}</span>
+                <span style={{ color: C.muted, fontSize: 11 }}>{r.startDate} → {r.endDate} · {r.days}gg</span>
+              </div>
+              {r.winner && (
+                <div style={{ background: "#160a24", border: `1px solid ${C.purple}44`, borderRadius: 6, padding: "7px 12px", marginBottom: 8, display: "flex", gap: 8, alignItems: "center" }}>
+                  <span>🏆</span>
+                  <span style={{ color: "#c39bd3", fontWeight: 700 }}>{r.winner} — {r.winnerPts} punti</span>
+                </div>
+              )}
+              {r.scores.slice().sort((a, b) => b.pts - a.pts).map(s => (
+                <div key={s.pid} style={{ display: "flex", justifyContent: "space-between", fontSize: 13, padding: "2px 0" }}>
+                  <span style={{ color: C.text }}>{s.name}</span><Pts v={s.pts} />
+                </div>
+              ))}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════
+   PAGE: GIOCATORI
+═══════════════════════════════════════════════════════ */
+function PageGiocatori({ players, setPlayers, allGames }) {
+  const [name, setName] = useState("");
+  const [selId, setSelId] = useState(null);
+
+  const stats = players.map(p => {
+    const mg = allGames.filter(g => g.pids.includes(p.id));
+    const won = mg.filter(g => (g.pm?.[p.id] ?? 0) > 0).length;
+    return {
+      ...p,
+      played: mg.length,
+      won,
+      lost: mg.filter(g => (g.pm?.[p.id] ?? 0) < 0).length,
+      totalPts: sumPts(p.id, allGames),
+      asCaller: mg.filter(g => g.callerId === p.id).length,
+      asPartner: mg.filter(g => g.partnerId === p.id).length,
+      winRate: mg.length ? Math.round(won / mg.length * 100) : 0,
+    };
+  });
+
+  const sel = stats.find(p => p.id === selId);
+
+  const add = () => {
+    const n = name.trim();
+    if (!n) return;
+    if (players.find(p => p.name.toLowerCase() === n.toLowerCase())) return;
+    setPlayers(ps => [...ps, { id: uid(), name: n }]);
+    setName("");
+  };
+
+  return (
+    <div>
+      <h2 style={{ color: C.gold, fontFamily: "'Playfair Display',serif", fontSize: 22, marginBottom: 18 }}>👤 Giocatori</h2>
+      <div style={{ display: "flex", gap: 8, marginBottom: 18 }}>
+        <input value={name} onChange={e => setName(e.target.value)} onKeyDown={e => e.key === "Enter" && add()} placeholder="Nome..." style={inp} />
+        <button onClick={add} style={{ ...btn.primary, flexShrink: 0 }}>Aggiungi</button>
+      </div>
+      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+        {stats.map(p => (
+          <div key={p.id} style={{ ...card, display: "flex", alignItems: "center", gap: 12, cursor: "pointer" }} onClick={() => setSelId(p.id)}>
+            <div style={{
+              width: 38, height: 38, borderRadius: "50%", flexShrink: 0, fontWeight: 800, fontSize: 15,
+              background: `linear-gradient(135deg, #2a1a08, ${C.gold})`,
+              display: "flex", alignItems: "center", justifyContent: "center", color: "#180e00",
+            }}>{p.name[0].toUpperCase()}</div>
+            <div style={{ flex: 1 }}>
+              <div style={{ color: C.text, fontWeight: 700 }}>{p.name}</div>
+              <div style={{ color: C.muted, fontSize: 11, marginTop: 1 }}>{p.played} partite · {p.winRate}% win</div>
+            </div>
+            <Pts v={p.totalPts} />
+            <button onClick={e => { e.stopPropagation(); setPlayers(ps => ps.filter(x => x.id !== p.id)); }} style={btn.danger}>✕</button>
+          </div>
+        ))}
+      </div>
+
+      {sel && (
+        <Modal title={`📊 ${sel.name}`} onClose={() => setSelId(null)}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12, marginBottom: 14 }}>
+            {[
+              ["Partite", sel.played, C.muted],
+              ["Vittorie", sel.won, C.green],
+              ["Sconfitte", sel.lost, C.red],
+              ["Punti", sel.totalPts > 0 ? `+${sel.totalPts}` : sel.totalPts, C.gold],
+              ["Win %", `${sel.winRate}%`, C.gold],
+              ["Da socio", sel.asPartner, C.muted],
+            ].map(([l, v, c]) => (
+              <div key={l} style={{ textAlign: "center", background: C.bg, borderRadius: 8, padding: "10px 6px" }}>
+                <div style={{ color: c, fontWeight: 800, fontSize: 20 }}>{v}</div>
+                <div style={{ color: C.muted, fontSize: 10, marginTop: 2 }}>{l}</div>
+              </div>
+            ))}
+          </div>
+          <div style={{ color: C.muted, fontSize: 12, textAlign: "center" }}>
+            Chiamante {sel.asCaller}× · Socio {sel.asPartner}×
+          </div>
+        </Modal>
+      )}
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════
+   PAGE: PARTITA
+═══════════════════════════════════════════════════════ */
+function PagePartita({ players, addGame, tableIds, setTableIds, giornoGames, raggioDays, onChiudiGiornata, onChiudiRaggio }) {
+  const [callerId, setCallerId] = useState("");
+  const [partnerId, setPartnerId] = useState("");
+  const [callType, setCallType] = useState("normale");
+  const [soglia, setSoglia] = useState(61);
+  const [cappotto, setCappotto] = useState(false);
+  const [callerWon, setCallerWon] = useState(null);
+  const [date, setDate] = useState(todayStr());
+
+  const toggleP = id => setTableIds(prev =>
+    prev.includes(id) ? prev.filter(x => x !== id) : prev.length < 5 ? [...prev, id] : prev
+  );
+
+  const selPlayers = players.filter(p => tableIds.includes(p.id));
+  const isAlone = callType === "mano" || callType === "carichi";
+  const sogliaMult = soglia > 80 ? 3 : soglia > 70 ? 2 : 1;
+  const ready = tableIds.length === 5;
+  const canSave = callerId && callerWon !== null && (isAlone || partnerId);
+
+  const reset = () => { setCallerId(""); setPartnerId(""); setCallType("normale"); setSoglia(61); setCappotto(false); setCallerWon(null); };
+
+  const save = () => {
+    if (!canSave) return;
+    const { caller, partner, opponent } = calcPoints(callType, cappotto, soglia, callerWon);
+    const pm = {};
+    tableIds.forEach(id => {
+      pm[id] = id === callerId ? caller : (id === partnerId && !isAlone) ? partner : opponent;
+    });
+    addGame({ id: uid(), date, pids: tableIds, callerId, partnerId: isAlone ? null : partnerId, callType, soglia, cappotto, callerWon, pm });
+    reset();
+  };
+
+  const preview = canSave ? calcPoints(callType, cappotto, soglia, callerWon) : null;
+
+  // Live dashboard data
+  const giornoRows = players
+    .filter(p => giornoGames.some(g => g.pids.includes(p.id)))
+    .map(p => ({ id: p.id, name: p.name, pts: sumPts(p.id, giornoGames) }))
+    .sort((a, b) => b.pts - a.pts);
+
+  const raggioRows = players
+    .map(p => ({ id: p.id, name: p.name, pts: raggioDays.reduce((a, d) => a + (d.totals[p.id] ?? 0), 0) }))
+    .filter(r => raggioDays.some(d => r.id in d.totals))
+    .sort((a, b) => b.pts - a.pts);
+
+  return (
+    <div>
+      <h2 style={{ color: C.gold, fontFamily: "'Playfair Display',serif", fontSize: 22, marginBottom: 12 }}>🃏 Partita</h2>
+
+      {/* ── Dashboard ── */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 14 }}>
+        {/* Oggi */}
+        <div style={{ ...card, padding: 12 }}>
+          <div style={{ color: C.gold, fontWeight: 700, fontSize: 11, letterSpacing: 1, marginBottom: 8 }}>☀️ OGGI ({giornoGames.length})</div>
+          {giornoRows.length === 0
+            ? <div style={{ color: C.muted, fontSize: 11 }}>—</div>
+            : giornoRows.map((r, i) => (
+              <div key={r.id} style={{ display: "flex", justifyContent: "space-between", fontSize: 12, marginBottom: 3 }}>
+                <span style={{ color: i === 0 ? C.gold : C.text }}>{r.name}</span>
+                <Pts v={r.pts} size={12} />
+              </div>
+            ))
+          }
+          <button onClick={onChiudiGiornata} style={{ ...btn.ghost(C.green), marginTop: 10, fontSize: 11 }}>
+            ☀️ Chiudi giornata
+          </button>
+        </div>
+
+        {/* Raggio */}
+        <div style={{ ...card, padding: 12 }}>
+          <div style={{ color: C.purple, fontWeight: 700, fontSize: 11, letterSpacing: 1, marginBottom: 8 }}>⚡ RAGGIO ({raggioDays.length}gg)</div>
+          {raggioRows.length === 0
+            ? <div style={{ color: C.muted, fontSize: 11 }}>—</div>
+            : raggioRows.map((r, i) => (
+              <div key={r.id} style={{ display: "flex", justifyContent: "space-between", fontSize: 12, marginBottom: 3 }}>
+                <span style={{ color: i === 0 ? C.gold : C.text }}>{r.name}</span>
+                <span style={{ fontWeight: 700, fontSize: 12, color: r.pts >= 15 ? C.green : r.pts > 0 ? C.gold : r.pts < 0 ? C.red : C.muted }}>{r.pts}/15</span>
+              </div>
+            ))
+          }
+          <button onClick={onChiudiRaggio} style={{ ...btn.ghost("#c39bd3"), marginTop: 10, fontSize: 11 }}>
+            🏁 Chiudi raggio
+          </button>
+        </div>
+      </div>
+
+      {/* ── Tavolo ── */}
+      <div style={{ ...card, marginBottom: 12 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+          <span style={{ color: C.gold, fontWeight: 700 }}>
+            {ready ? "🪑 Tavolo" : `Scegli 5 giocatori (${tableIds.length}/5)`}
+          </span>
+          {ready && (
+            <button onClick={() => { setTableIds([]); reset(); }} style={{ ...btn.danger, padding: "4px 10px", fontSize: 11 }}>Cambia</button>
+          )}
+        </div>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+          {players.map(p => (
+            <button key={p.id} onClick={() => toggleP(p.id)} style={{
+              padding: "8px 14px", borderRadius: 7, cursor: "pointer", fontWeight: 700, fontSize: 13, fontFamily: "inherit",
+              opacity: ready && !tableIds.includes(p.id) ? 0.2 : 1,
+              background: tableIds.includes(p.id) ? C.gold : "transparent",
+              color: tableIds.includes(p.id) ? "#180e00" : C.muted,
+              border: `1px solid ${tableIds.includes(p.id) ? C.gold : C.border}`,
+            }}>{p.name}</button>
+          ))}
+        </div>
+      </div>
+
+      {ready && (
+        <>
+          {/* ── Asta ── */}
+          <div style={{ ...card, marginBottom: 12 }}>
+            <div style={{ color: C.gold, fontWeight: 700, marginBottom: 14 }}>Asta & Chiamata</div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+
+              <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                <span style={{ color: C.muted, fontSize: 13, flexShrink: 0 }}>Data:</span>
+                <input value={date} onChange={e => setDate(e.target.value)} style={{ ...inp, width: 120 }} />
+              </div>
+
+              <div>
+                <div style={{ color: C.muted, fontSize: 12, marginBottom: 5 }}>Chi ha chiamato?</div>
+                <select value={callerId} onChange={e => setCallerId(e.target.value)} style={sel}>
+                  <option value="">— seleziona —</option>
+                  {selPlayers.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                </select>
+              </div>
+
+              <div>
+                <div style={{ color: C.muted, fontSize: 12, marginBottom: 6 }}>Tipo chiamata</div>
+                <div style={{ display: "flex", gap: 7 }}>
+                  {[["normale", "Normale"], ["mano", "In Mano"], ["carichi", "Carichi"]].map(([v, l]) => (
+                    <button key={v} onClick={() => setCallType(v)} style={{
+                      flex: 1, padding: "9px 0", borderRadius: 7, cursor: "pointer", fontWeight: 700, fontSize: 12, fontFamily: "inherit",
+                      background: callType === v ? C.gold : "transparent",
+                      color: callType === v ? "#180e00" : C.muted,
+                      border: `1px solid ${callType === v ? C.gold : C.border}`,
+                    }}>{l}</button>
+                  ))}
+                </div>
+              </div>
+
+              {!isAlone && callerId && (
+                <div>
+                  <div style={{ color: C.muted, fontSize: 12, marginBottom: 5 }}>Socio segreto</div>
+                  <select value={partnerId} onChange={e => setPartnerId(e.target.value)} style={sel}>
+                    <option value="">— seleziona —</option>
+                    {selPlayers.filter(p => p.id !== callerId).map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                  </select>
+                </div>
+              )}
+
+              <div>
+                <div style={{ color: C.muted, fontSize: 12, marginBottom: 4 }}>
+                  Soglia: <strong style={{ color: C.gold }}>{soglia}</strong>
+                  {sogliaMult > 1 && <span style={{ marginLeft: 8 }}><Badge color={sogliaMult === 3 ? C.red : "#d4870a"}>{sogliaMult === 2 ? "×2 DOPPIA" : "×3 TRIPLA"}</Badge></span>}
+                </div>
+                <input type="range" min={61} max={120} value={soglia} onChange={e => setSoglia(+e.target.value)} style={{ width: "100%", accentColor: C.gold }} />
+                <div style={{ display: "flex", justifyContent: "space-between", color: C.muted, fontSize: 10 }}>
+                  <span>61</span><span>71 ×2</span><span>81 ×3</span><span>120</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* ── Risultato ── */}
+          {callerId && (isAlone || partnerId) && (
+            <div style={{ ...card, marginBottom: 12 }}>
+              <div style={{ color: C.gold, fontWeight: 700, marginBottom: 12 }}>Risultato</div>
+
+              <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
+                {[[true, "✅ Vince", C.green], [false, "❌ Perde", C.red]].map(([v, l, col]) => (
+                  <button key={String(v)} onClick={() => setCallerWon(v)} style={{
+                    flex: 1, padding: 12, borderRadius: 8, cursor: "pointer", fontWeight: 800, fontSize: 13, fontFamily: "inherit",
+                    background: callerWon === v ? col : "transparent",
+                    color: callerWon === v ? "#fff" : C.muted,
+                    border: `1px solid ${callerWon === v ? col : C.border}`,
+                  }}>{l}</button>
+                ))}
+              </div>
+
+              <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16 }}>
+                <button onClick={() => setCappotto(!cappotto)} style={{
+                  padding: "8px 16px", borderRadius: 7, cursor: "pointer", fontWeight: 700, fontFamily: "inherit",
+                  background: cappotto ? C.purple : "transparent",
+                  color: cappotto ? "#fff" : C.muted,
+                  border: `1px solid ${cappotto ? C.purple : C.border}`,
+                }}>🎩 Cappotto{cappotto ? " ×2" : "?"}</button>
+              </div>
+
+              {preview && (
+                <div style={{ background: C.bg, borderRadius: 8, padding: 14, marginBottom: 16 }}>
+                  {tableIds.map(id => {
+                    const p = players.find(x => x.id === id);
+                    const pt = id === callerId ? preview.caller : (id === partnerId && !isAlone) ? preview.partner : preview.opponent;
+                    const role = id === callerId ? "chiamante" : (id === partnerId && !isAlone) ? "socio" : "avversario";
+                    return (
+                      <div key={id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 5 }}>
+                        <span style={{ color: C.text, fontSize: 13 }}>{p?.name} <span style={{ color: C.muted, fontSize: 11 }}>({role})</span></span>
+                        <Pts v={pt} />
+                      </div>
+                    );
+                  })}
+                  <div style={{ borderTop: `1px solid ${C.border}`, marginTop: 8, paddingTop: 8, color: C.muted, fontSize: 11 }}>
+                    Moltiplicatore totale: <strong style={{ color: C.gold }}>{sogliaMult * (cappotto ? 2 : 1)}×</strong>
+                  </div>
+                </div>
+              )}
+
+              <button onClick={save} disabled={!canSave} style={{ ...btn.primary, width: "100%", padding: 14, fontSize: 15, opacity: canSave ? 1 : 0.4 }}>
+                💾 Salva Partita
+              </button>
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════
+   PAGE: STORICO
+═══════════════════════════════════════════════════════ */
+function PageStorico({ allGames, players, deleteGame }) {
+  const name = id => players.find(p => p.id === id)?.name ?? "?";
+  return (
+    <div>
+      <h2 style={{ color: C.gold, fontFamily: "'Playfair Display',serif", fontSize: 22, marginBottom: 18 }}>📜 Storico</h2>
+      {allGames.length === 0 && <div style={{ color: C.muted, textAlign: "center", padding: 40 }}>Nessuna partita.</div>}
+      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+        {allGames.map(g => (
+          <div key={g.id} style={card}>
+            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 10 }}>
+              <div>
+                <div style={{ color: C.muted, fontSize: 12, marginBottom: 6 }}>{g.date}</div>
+                <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
+                  {g.callType !== "normale" && <Badge color="#d4870a">{g.callType.toUpperCase()}</Badge>}
+                  {(g.soglia > 70) && <Badge color={g.soglia > 80 ? C.red : "#d4870a"}>{g.soglia > 80 ? "×3" : "×2"}</Badge>}
+                  {g.cappotto && <Badge color={C.purple}>CAPPOTTO</Badge>}
+                  <Badge color={g.callerWon ? C.green : C.red}>{g.callerWon ? "VINCE" : "PERDE"}</Badge>
+                </div>
+              </div>
+              <button onClick={() => deleteGame(g.id)} style={btn.danger}>✕</button>
+            </div>
+            {g.pids.map(id => {
+              const role = id === g.callerId ? "📣" : id === g.partnerId ? "🤝" : "⚔️";
+              return (
+                <div key={id} style={{ display: "flex", justifyContent: "space-between", fontSize: 13, padding: "2px 0" }}>
+                  <span style={{ color: C.text }}>{role} {name(id)}</span>
+                  <Pts v={g.pm?.[id] ?? 0} />
+                </div>
+              );
+            })}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════
+   PAGE: IMPORT (CSV/Excel via FileReader, no xlsx lib)
+═══════════════════════════════════════════════════════ */
+function PageImport({ players, setPlayers, addGames, db, loadDb }) {
+  const [msg, setMsg] = useState("");
+  const [preview, setPreview] = useState(null); // {headers, rows, dateColIdx}
+  const [dateColIdx, setDateColIdx] = useState(-1);
+
+  const parseCSV = text => {
+    const lines = text.split(/\r?\n/).filter(l => l.trim());
+    return lines.map(l => l.split(",").map(c => c.trim().replace(/^"|"$/g, "")));
+  };
+
+  const handleFile = e => {
+    const file = e.target.files[0];
+    if (!file) return;
+    if (!file.name.match(/\.(csv)$/i)) { setMsg("⚠️ Solo file CSV supportati in questa versione."); return; }
+    const reader = new FileReader();
+    reader.onload = ev => {
+      const rows = parseCSV(ev.target.result);
+      if (rows.length < 2) { setMsg("File vuoto."); return; }
+      const headers = rows[0];
+      const dIdx = headers.findIndex(h => /data|date/i.test(h));
+      setDateColIdx(dIdx);
+      setPreview({ headers, rows: rows.slice(1).filter(r => r.some(c => c !== "")), dateColIdx: dIdx });
+      setMsg("");
+    };
+    reader.readAsText(file);
+  };
+
+  const doImport = () => {
+    if (!preview) return;
+    const { headers, rows } = preview;
+    const pCols = headers.map((h, i) => ({ name: h, i })).filter(c => c.i !== dateColIdx && c.name);
+    let np = [...players];
+    pCols.forEach(({ name }) => {
+      if (!np.find(p => p.name.toLowerCase() === name.toLowerCase()))
+        np.push({ id: uid(), name });
+    });
+    setPlayers(np);
+    const ng = [];
+    rows.forEach(row => {
+      const dv = dateColIdx >= 0 ? (row[dateColIdx] || todayStr()) : todayStr();
+      const pids = [], pm = {};
+      let ok = true;
+      pCols.forEach(({ name, i }) => {
+        const pt = Number(row[i]);
+        if (isNaN(pt)) { ok = false; return; }
+        const p = np.find(x => x.name.toLowerCase() === name.toLowerCase());
+        if (!p) { ok = false; return; }
+        pids.push(p.id); pm[p.id] = pt;
+      });
+      if (!ok || pids.length < 2) return;
+      const callerId = pids.slice().sort((a, b) => pm[b] - pm[a])[0];
+      ng.push({ id: uid(), date: dv, pids, callerId, partnerId: null, callType: "import", soglia: 61, cappotto: false, callerWon: pm[callerId] > 0, pm });
+    });
+    addGames(ng);
+    setMsg(`✅ Importate ${ng.length} partite!`);
+    setPreview(null);
+  };
+
+  const exportDb = () => {
+    const json = JSON.stringify(db, null, 2);
+    const blob = new Blob([json], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `briscolone_${todayStr().replace(/\//g,"-")}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const importDb = e => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = ev => {
+      try {
+        const data = JSON.parse(ev.target.result);
+        if (!data.players || !data.allGames) { setMsg("❌ File JSON non valido."); return; }
+        loadDb(data);
+        setMsg("✅ Database caricato!");
+      } catch {
+        setMsg("❌ Errore nel file JSON.");
+      }
+    };
+    reader.readAsText(file);
+  };
+
+  return (
+    <div>
+      <h2 style={{ color: C.gold, fontFamily: "'Playfair Display',serif", fontSize: 22, marginBottom: 16 }}>📥 Dati</h2>
+
+      {/* ── BACKUP JSON ── */}
+      <div style={{ ...card, marginBottom: 20 }}>
+        <div style={{ color: C.gold, fontWeight: 700, fontSize: 13, marginBottom: 4 }}>💾 Backup completo</div>
+        <div style={{ color: C.muted, fontSize: 12, lineHeight: 1.6, marginBottom: 14 }}>
+          Scarica tutto il database (giocatori, partite, raggi) in formato JSON. Puoi modificarlo e ricaricarlo.
+        </div>
+        <div style={{ display: "flex", gap: 8 }}>
+          <button onClick={exportDb} style={{ ...btn.primary, flex: 1 }}>⬇️ Scarica JSON</button>
+          <label style={{ ...btn.primary, flex: 1, textAlign: "center", cursor: "pointer" }}>
+            ⬆️ Carica JSON
+            <input type="file" accept=".json" onChange={importDb} style={{ display: "none" }} />
+          </label>
+        </div>
+      </div>
+
+      <div style={{ borderTop: `1px solid ${C.border}`, marginBottom: 20 }} />
+
+      <div style={{ color: C.gold, fontWeight: 700, fontSize: 13, marginBottom: 4 }}>📊 Importa partite da CSV</div>
+      <p style={{ color: C.muted, fontSize: 12, lineHeight: 1.7, marginBottom: 14 }}>
+        File CSV con nomi giocatori come colonne. Colonna "data" opzionale. Ogni riga = una partita.
+      </p>
+      <label style={{ display: "block", padding: 24, border: `2px dashed ${C.border}`, borderRadius: 12, textAlign: "center", cursor: "pointer", color: C.muted, marginBottom: 16, fontSize: 14 }}>
+        📎 Seleziona file .csv
+        <input type="file" accept=".csv" onChange={handleFile} style={{ display: "none" }} />
+      </label>
+
+      {preview && (
+        <div style={{ ...card, marginBottom: 14 }}>
+          <div style={{ color: C.gold, fontWeight: 700, marginBottom: 10 }}>Anteprima — {preview.rows.length} righe</div>
+          <div style={{ overflowX: "auto", marginBottom: 12 }}>
+            <table style={{ borderCollapse: "collapse", fontSize: 12, width: "100%" }}>
+              <thead><tr>{preview.headers.map((h, i) => <th key={i} style={{ color: C.gold, padding: "4px 8px", textAlign: "left", borderBottom: `1px solid ${C.border}` }}>{h}</th>)}</tr></thead>
+              <tbody>{preview.rows.slice(0, 3).map((r, i) => <tr key={i}>{preview.headers.map((_, j) => <td key={j} style={{ color: C.text, padding: "4px 8px" }}>{r[j] ?? ""}</td>)}</tr>)}</tbody>
+            </table>
+          </div>
+          <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 12 }}>
+            <span style={{ color: C.muted, fontSize: 13, flexShrink: 0 }}>Col. data:</span>
+            <select value={dateColIdx} onChange={e => setDateColIdx(+e.target.value)} style={{ ...sel, width: "auto" }}>
+              <option value={-1}>— nessuna —</option>
+              {preview.headers.map((h, i) => <option key={i} value={i}>{h}</option>)}
+            </select>
+          </div>
+          <button onClick={doImport} style={{ ...btn.primary, width: "100%" }}>📥 Importa {preview.rows.length} partite</button>
+        </div>
+      )}
+
+      {msg && (
+        <div style={{
+          background: msg.startsWith("✅") ? "#091a0a" : "#1a0909",
+          border: `1px solid ${msg.startsWith("✅") ? C.green : C.red}`,
+          borderRadius: 8, padding: 14, color: msg.startsWith("✅") ? C.green : C.red, fontWeight: 700,
+        }}>{msg}</div>
+      )}
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════
+   APP ROOT
+═══════════════════════════════════════════════════════ */
+function App() {
+  const [players, setPlayers] = useState([]);
+  const [allGames, setAllGames] = useState([]);      // storico generale, mai azzerato
+  const [giornoGames, setGiornoGames] = useState([]); // giornata corrente
+  const [raggioDays, setRaggioDays] = useState([]);  // snapshot giornate nel raggio [{date, totals:{pid:pts}}]
+  const [raggi, setRaggi] = useState([]);            // raggi completati
+  const [tableIds, setTableIds] = useState([]);
+  const [page, setPage] = useState("classifiche");
+
+  // Two independent dialog states to avoid conflicts
+  const [confirmDlg, setConfirmDlg] = useState(null); // {title, msg, onOk}
+  const [infoDlg, setInfoDlg] = useState(null);        // {title, lines:[]}
+
+  // ── Game management ──────────────────────────────────────────────────────────
+  const addGame = g => { setAllGames(p => [g, ...p]); setGiornoGames(p => [g, ...p]); };
+  const addGames = gs => { setAllGames(p => [...gs, ...p]); setGiornoGames(p => [...gs, ...p]); };
+  const deleteGame = id => { setAllGames(p => p.filter(g => g.id !== id)); setGiornoGames(p => p.filter(g => g.id !== id)); };
+
+  // ── DB export/import ─────────────────────────────────────────────────────────
+  const db = { players, allGames, giornoGames, raggioDays, raggi };
+
+  const loadDb = data => {
+    setPlayers(data.players ?? []);
+    setAllGames(data.allGames ?? []);
+    setGiornoGames(data.giornoGames ?? []);
+    setRaggioDays(data.raggioDays ?? []);
+    setRaggi(data.raggi ?? []);
+  };
+
+  // ── Chiudi Giornata ──────────────────────────────────────────────────────────
+  const doChiudiGiornata = () => {
+    if (giornoGames.length === 0) {
+      setInfoDlg({ title: "Nessuna partita", lines: ["Non ci sono partite nella giornata corrente."] });
+      return;
+    }
+    // Calcola totali
+    const totals = {};
+    players.forEach(p => { totals[p.id] = sumPts(p.id, giornoGames); });
+    const dateLabel = giornoGames[0]?.date ?? todayStr();
+
+    // Aggiorna raggioDays (upsert per data)
+    setRaggioDays(prev => [...prev.filter(d => d.date !== dateLabel), { date: dateLabel, totals }]);
+
+    // Azzera giornata
+    setGiornoGames([]);
+
+    // Mostra riepilogo
+    const lines = [
+      `Data: ${dateLabel}`,
+      "─────────────────",
+      ...players
+        .filter(p => players.some(x => x.id === p.id) && totals[p.id] !== undefined && giornoGames.some(g => g.pids.includes(p.id)))
+        .map(p => `${p.name}: ${totals[p.id] > 0 ? "+" : ""}${totals[p.id]} pt`),
+    ];
+    setInfoDlg({ title: "☀️ Giornata chiusa!", lines });
+  };
+
+  const chiudiGiornata = () => setConfirmDlg({
+    title: "Chiudi Giornata",
+    msg: "I totali di oggi verranno aggiunti al raggio e la giornata si azzererà.",
+    onOk: doChiudiGiornata,
+  });
+
+  // ── Chiudi Raggio ────────────────────────────────────────────────────────────
+  const doChiudiRaggio = () => {
+    if (raggioDays.length === 0) {
+      setInfoDlg({ title: "Raggio vuoto", lines: ["Chiudi almeno una giornata prima di chiudere il raggio."] });
+      return;
+    }
+    const scores = players
+      .filter(p => raggioDays.some(d => p.id in d.totals))
+      .map(p => ({ pid: p.id, name: p.name, pts: raggioDays.reduce((a, d) => a + (d.totals[p.id] ?? 0), 0) }));
+    const sorted = scores.slice().sort((a, b) => b.pts - a.pts);
+    const winner = sorted[0];
+    const dates = raggioDays.map(d => d.date).sort();
+
+    setRaggi(rs => [...rs, {
+      id: uid(),
+      startDate: dates[0],
+      endDate: dates[dates.length - 1],
+      days: dates.length,
+      scores,
+      winner: winner?.name ?? null,
+      winnerPts: winner?.pts ?? 0,
+    }]);
+    setRaggioDays([]);
+    setGiornoGames([]);
+
+    setInfoDlg({
+      title: "🏁 Raggio chiuso!",
+      lines: [
+        `Vincitore: ${winner?.name ?? "—"} (${winner?.pts ?? 0} pt)`,
+        "─────────────────",
+        ...sorted.map(s => `${s.name}: ${s.pts > 0 ? "+" : ""}${s.pts} pt`),
+        "─────────────────",
+        "Nuovo raggio iniziato da zero!",
+      ],
+    });
+  };
+
+  const chiudiRaggio = () => setConfirmDlg({
+    title: "Chiudi Raggio",
+    msg: "Il raggio verrà chiuso, il vincitore registrato e si ripartirà da zero.",
+    onOk: doChiudiRaggio,
+  });
+
+  const NAV = [
+    { id: "classifiche", icon: "🏆", label: "Classifiche" },
+    { id: "giocatori", icon: "👤", label: "Giocatori" },
+    { id: "partita", icon: "🃏", label: "Partita" },
+    { id: "storico", icon: "📜", label: "Storico" },
+    { id: "import", icon: "📥", label: "Import" },
+  ];
+
+  return (
+    <div style={{ minHeight: "100vh", background: C.bg, color: C.text, fontFamily: "'Crimson Text', Georgia, serif", display: "flex", flexDirection: "column" }}>
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=Crimson+Text:ital,wght@0,400;0,600;0,700;1,400&display=swap');
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        select option { background: #120e08; }
+        ::-webkit-scrollbar { width: 4px; }
+        ::-webkit-scrollbar-track { background: #080604; }
+        ::-webkit-scrollbar-thumb { background: #2e1f0e; border-radius: 4px; }
+        @keyframes fadeIn { from { opacity:0; transform:translateY(5px); } to { opacity:1; transform:none; } }
+        input[type=range] { accent-color: #c8a45a; }
+      `}</style>
+
+      {/* Header */}
+      <div style={{ background: "linear-gradient(180deg, #1a1000, #080604)", borderBottom: `1px solid ${C.border}`, padding: "14px 20px", display: "flex", alignItems: "center", gap: 12 }}>
+        <span style={{ fontSize: 28, color: C.gold }}>♠</span>
+        <div>
+          <h1 style={{ fontFamily: "'Playfair Display',serif", fontSize: 21, color: C.gold, letterSpacing: 1 }}>Briscolone</h1>
+          <div style={{ color: C.muted, fontSize: 9, letterSpacing: 3 }}>SEGNAPUNTI</div>
+        </div>
+        <div style={{ marginLeft: "auto", display: "flex", gap: 10 }}>
+          {["♥", "♦", "♣"].map(s => <span key={s} style={{ color: C.muted, fontSize: 18 }}>{s}</span>)}
+        </div>
+      </div>
+
+      {/* Content */}
+      <div style={{ flex: 1, padding: "16px 16px 90px", maxWidth: 520, width: "100%", margin: "0 auto", animation: "fadeIn .25s ease" }}>
+        {page === "classifiche" && <PageClassifiche players={players} allGames={allGames} raggioDays={raggioDays} giornoGames={giornoGames} raggi={raggi} onChiudiRaggio={chiudiRaggio} />}
+        {page === "giocatori" && <PageGiocatori players={players} setPlayers={setPlayers} allGames={allGames} />}
+        {page === "partita" && <PagePartita players={players} addGame={addGame} tableIds={tableIds} setTableIds={setTableIds} giornoGames={giornoGames} raggioDays={raggioDays} onChiudiGiornata={chiudiGiornata} onChiudiRaggio={chiudiRaggio} />}
+        {page === "storico" && <PageStorico allGames={allGames} players={players} deleteGame={deleteGame} />}
+        {page === "import" && <PageImport players={players} setPlayers={setPlayers} addGames={addGames} db={db} loadDb={loadDb} />}
+      </div>
+
+      {/* Dialogs */}
+      {confirmDlg && (
+        <Confirm
+          title={confirmDlg.title}
+          msg={confirmDlg.msg}
+          onOk={() => { const fn = confirmDlg.onOk; setConfirmDlg(null); fn(); }}
+          onCancel={() => setConfirmDlg(null)}
+        />
+      )}
+      {infoDlg && (
+        <Info title={infoDlg.title} lines={infoDlg.lines} onOk={() => setInfoDlg(null)} />
+      )}
+
+      {/* Bottom Nav */}
+      <div style={{ position: "fixed", bottom: 0, left: 0, right: 0, background: "#0e0b06", borderTop: `1px solid ${C.border}`, display: "flex", justifyContent: "space-around", padding: "8px 0 14px" }}>
+        {NAV.map(n => (
+          <button key={n.id} onClick={() => setPage(n.id)} style={{ background: "none", border: "none", cursor: "pointer", display: "flex", flexDirection: "column", alignItems: "center", gap: 2, padding: "0 4px" }}>
+            <span style={{ fontSize: 20, opacity: page === n.id ? 1 : 0.35 }}>{n.icon}</span>
+            <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: 1, color: page === n.id ? C.gold : C.muted }}>{n.label.toUpperCase()}</span>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+
+function useFirebase(loadDb) {
+  const [status, setStatus] = React.useState("connecting");
+  const unsubRef = React.useRef(null);
+
+  React.useEffect(() => {
+    const init = () => {
+      const s = document.querySelector('script[type="module"]');
+      if (!s || s.textContent.includes("INSERISCI_QUI")) { setStatus("disabled"); return; }
+      setStatus("ok");
+      unsubRef.current = window.__fbListen(loadDb);
+    };
+    if (window.__fbReady) init();
+    else window.addEventListener("fbReady", init, { once: true });
+    return () => { if (unsubRef.current) unsubRef.current(); };
+  }, []);
+
+  const save = async (data) => {
+    if (status !== "ok") return;
+    setStatus("saving");
+    const ok = await window.__fbSave(data);
+    setStatus(ok ? "ok" : "error");
+    if (!ok) setTimeout(() => setStatus("ok"), 3000);
+  };
+
+  return { status, save };
+}
+
+function FbBadge({ status }) {
+  const conf = {
+    connecting: { color:"#c8a45a", icon:"⏳", label:"connessione..." },
+    ok:         { color:"#2e7d4f", icon:"☁️",  label:"sincronizzato" },
+    saving:     { color:"#c8a45a", icon:"💾", label:"salvataggio..." },
+    error:      { color:"#b53a2f", icon:"⚠️", label:"errore sync" },
+    disabled:   { color:"#7a6a55", icon:"💾", label:"locale" },
+  };
+  const c = conf[status] ?? conf.disabled;
+  return (
+    <div style={{ display:"flex", alignItems:"center", gap:5,
+      background:c.color+"22", border:`1px solid ${c.color}44`,
+      borderRadius:20, padding:"3px 10px" }}>
+      <span style={{ fontSize:12 }}>{c.icon}</span>
+      <span style={{ fontSize:10, fontWeight:700, color:c.color, letterSpacing:0.5 }}>{c.label.toUpperCase()}</span>
+    </div>
+  );
+}
+
+function AppWithFirebase() {
+  const [players, setPlayers] = React.useState([]);
+  const [allGames, setAllGames] = React.useState([]);
+  const [giornoGames, setGiornoGames] = React.useState([]);
+  const [raggioDays, setRaggioDays] = React.useState([]);
+  const [raggi, setRaggi] = React.useState([]);
+  const [tableIds, setTableIds] = React.useState([]);
+  const [page, setPage] = React.useState("classifiche");
+  const [confirmDlg, setConfirmDlg] = React.useState(null);
+  const [infoDlg, setInfoDlg] = React.useState(null);
+
+  const loadDb = (data) => {
+    setPlayers(data.players ?? []);
+    setAllGames(data.allGames ?? []);
+    setGiornoGames(data.giornoGames ?? []);
+    setRaggioDays(data.raggioDays ?? []);
+    setRaggi(data.raggi ?? []);
+  };
+
+  const { status: fbStatus, save: fbSave } = useFirebase(loadDb);
+
+  const addGame = g => { setAllGames(p=>[g,...p]); setGiornoGames(p=>[g,...p]); };
+  const addGames = gs => { setAllGames(p=>[...gs,...p]); setGiornoGames(p=>[...gs,...p]); };
+  const deleteGame = id => { setAllGames(p=>p.filter(g=>g.id!==id)); setGiornoGames(p=>p.filter(g=>g.id!==id)); };
+
+  const doChiudiGiornata = () => {
+    if (giornoGames.length === 0) {
+      setInfoDlg({ title:"Nessuna partita", lines:["Non ci sono partite oggi."] }); return;
+    }
+    const totals = {};
+    players.forEach(p => { totals[p.id] = sumPts(p.id, giornoGames); });
+    const dateLabel = giornoGames[0]?.date ?? todayStr();
+    const newRaggioDays = [...raggioDays.filter(d=>d.date!==dateLabel), { date:dateLabel, totals }];
+    setRaggioDays(newRaggioDays);
+    setGiornoGames([]);
+    fbSave({ players, allGames, giornoGames:[], raggioDays:newRaggioDays, raggi });
+    setInfoDlg({ title:"☀️ Giornata chiusa!", lines:[
+      "Data: " + dateLabel, "─────────────────",
+      ...players.filter(p=>giornoGames.some(g=>g.pids.includes(p.id))).map(p=>`${p.name}: ${totals[p.id]>0?"+":""}${totals[p.id]} pt`),
+    ]});
+  };
+
+  const chiudiGiornata = () => setConfirmDlg({
+    title:"Chiudi Giornata",
+    msg:"I totali di oggi verranno aggiunti al raggio e la giornata si azzererà.",
+    onOk: doChiudiGiornata,
+  });
+
+  const doChiudiRaggio = () => {
+    if (raggioDays.length === 0) {
+      setInfoDlg({ title:"Raggio vuoto", lines:["Chiudi almeno una giornata prima."] }); return;
+    }
+    const scores = players
+      .filter(p=>raggioDays.some(d=>p.id in d.totals))
+      .map(p=>({ pid:p.id, name:p.name, pts:raggioDays.reduce((a,d)=>a+(d.totals[p.id]??0),0) }));
+    const sorted = scores.slice().sort((a,b)=>b.pts-a.pts);
+    const winner = sorted[0];
+    const dates = raggioDays.map(d=>d.date).sort();
+    const newRaggio = { id:uid(), startDate:dates[0], endDate:dates[dates.length-1], days:dates.length, scores, winner:winner?.name??null, winnerPts:winner?.pts??0 };
+    const newRaggi = [...raggi, newRaggio];
+    setRaggi(newRaggi);
+    setRaggioDays([]);
+    setGiornoGames([]);
+    fbSave({ players, allGames, giornoGames:[], raggioDays:[], raggi:newRaggi });
+    setInfoDlg({ title:"🏁 Raggio chiuso!", lines:[
+      "Vincitore: " + (winner?.name??"—") + " (" + (winner?.pts??0) + " pt)", "─────────────────",
+      ...sorted.map(s=>s.name+": "+(s.pts>0?"+":"")+s.pts+" pt"),
+      "─────────────────", "Nuovo raggio iniziato da zero!",
+    ]});
+  };
+
+  const chiudiRaggio = () => setConfirmDlg({
+    title:"Chiudi Raggio",
+    msg:"Il raggio verrà chiuso, il vincitore registrato e si ripartirà da zero.",
+    onOk: doChiudiRaggio,
+  });
+
+  const NAV = [
+    {id:"classifiche",icon:"🏆",label:"Classifiche"},
+    {id:"giocatori",icon:"👤",label:"Giocatori"},
+    {id:"partita",icon:"🃏",label:"Partita"},
+    {id:"storico",icon:"📜",label:"Storico"},
+    {id:"import",icon:"📥",label:"Dati"},
+  ];
+
+  const dbData = { players, allGames, giornoGames, raggioDays, raggi };
+
+  return (
+    <div style={{ minHeight:"100vh", background:C.bg, color:C.text, fontFamily:"'Crimson Text',Georgia,serif", display:"flex", flexDirection:"column" }}>
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=Crimson+Text:ital,wght@0,400;0,600;0,700;1,400&display=swap');
+        *{box-sizing:border-box;margin:0;padding:0}
+        select option{background:#120e08}
+        ::-webkit-scrollbar{width:4px}::-webkit-scrollbar-track{background:#080604}::-webkit-scrollbar-thumb{background:#2e1f0e;border-radius:4px}
+        @keyframes fadeIn{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:none}}
+        input[type=range]{accent-color:#c8a45a}
+      `}</style>
+
+      <div style={{ background:"linear-gradient(180deg,#1a1000,#080604)", borderBottom:`1px solid ${C.border}`, padding:"12px 20px", display:"flex", alignItems:"center", gap:12 }}>
+        <span style={{ fontSize:28, color:C.gold }}>♠</span>
+        <div>
+          <h1 style={{ fontFamily:"'Playfair Display',serif", fontSize:21, color:C.gold, letterSpacing:1 }}>Briscolone</h1>
+          <div style={{ color:C.muted, fontSize:9, letterSpacing:3 }}>SEGNAPUNTI</div>
+        </div>
+        <div style={{ marginLeft:"auto" }}><FbBadge status={fbStatus} /></div>
+      </div>
+
+      <div style={{ flex:1, padding:"16px 16px 90px", maxWidth:520, width:"100%", margin:"0 auto", animation:"fadeIn .25s ease" }}>
+        {page==="classifiche" && <PageClassifiche players={players} allGames={allGames} raggioDays={raggioDays} giornoGames={giornoGames} raggi={raggi} onChiudiRaggio={chiudiRaggio} />}
+        {page==="giocatori" && <PageGiocatori players={players} setPlayers={setPlayers} allGames={allGames} />}
+        {page==="partita" && <PagePartita players={players} addGame={addGame} tableIds={tableIds} setTableIds={setTableIds} giornoGames={giornoGames} raggioDays={raggioDays} onChiudiGiornata={chiudiGiornata} onChiudiRaggio={chiudiRaggio} />}
+        {page==="storico" && <PageStorico allGames={allGames} players={players} deleteGame={deleteGame} />}
+        {page==="import" && <PageImport players={players} setPlayers={setPlayers} addGames={addGames} db={dbData} loadDb={loadDb} />}
+      </div>
+
+      {confirmDlg && <Confirm title={confirmDlg.title} msg={confirmDlg.msg} onOk={()=>{const fn=confirmDlg.onOk;setConfirmDlg(null);fn();}} onCancel={()=>setConfirmDlg(null)} />}
+      {infoDlg && <Info title={infoDlg.title} lines={infoDlg.lines} onOk={()=>setInfoDlg(null)} />}
+
+      <div style={{ position:"fixed", bottom:0, left:0, right:0, background:"#0e0b06", borderTop:`1px solid ${C.border}`, display:"flex", justifyContent:"space-around", padding:"8px 0 14px" }}>
+        {NAV.map(n=>(
+          <button key={n.id} onClick={()=>setPage(n.id)} style={{ background:"none", border:"none", cursor:"pointer", display:"flex", flexDirection:"column", alignItems:"center", gap:2, padding:"0 4px" }}>
+            <span style={{ fontSize:20, opacity:page===n.id?1:0.35 }}>{n.icon}</span>
+            <span style={{ fontSize:9, fontWeight:700, letterSpacing:1, color:page===n.id?C.gold:C.muted }}>{n.label.toUpperCase()}</span>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+const root = ReactDOM.createRoot(document.getElementById("root"));
+root.render(<AppWithFirebase />);
+
+</script>
+</body>
+</html>
