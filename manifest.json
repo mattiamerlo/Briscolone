@@ -1,0 +1,25 @@
+{
+  "name": "Briscolone - Casino Breda",
+  "short_name": "Briscolone",
+  "description": "Tracker punteggi Briscolone",
+  "start_url": "/Briscolone/",
+  "scope": "/Briscolone/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#1a4a2e",
+  "theme_color": "#1a4a2e",
+  "icons": [
+    {
+      "src": "icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

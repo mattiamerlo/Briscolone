@@ -1,0 +1,1787 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Briscolone">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#1a4a2e">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<title>Briscolone ♠</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@700;900&family=Lato:wght@300;400;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js"></script>
+<script type="module">
+  const FIREBASE_CONFIG = {
+    apiKey:            "AIzaSyA1nCJrQznVXIv0sRh7q_95ynic1H9y55U",
+    authDomain:        "briscolone-breda.firebaseapp.com",
+    projectId:         "briscolone-breda",
+    storageBucket:     "briscolone-breda.firebasestorage.app",
+    messagingSenderId: "100267933362",
+    appId:             "1:100267933362:web:446fe3adc189c38c3d13ab",
+  };
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+  import { getFirestore, doc, setDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+  const fbApp = initializeApp(FIREBASE_CONFIG);
+  const fbDb  = getFirestore(fbApp);
+  const REF   = doc(fbDb, "briscolone", "database");
+  window.__fbSave = async (data) => {
+    try { await setDoc(REF, data); return true; }
+    catch(e) { console.error("Firebase:", e); return false; }
+  };
+  window.__fbListen = (cb) => onSnapshot(REF, snap => { if (snap.exists()) cb(snap.data()); });
+  window.__fbReady = true;
+  window.dispatchEvent(new Event("fbReady"));
+</script>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  background-color: #1a4a2e;
+  padding-bottom: env(safe-area-inset-bottom);
+  background-image:
+    radial-gradient(ellipse at 15% 15%, #1f5c38 0%, transparent 55%),
+    radial-gradient(ellipse at 85% 85%, #122e1c 0%, transparent 55%),
+    repeating-linear-gradient(0deg, transparent, transparent 40px, rgba(0,0,0,0.04) 40px, rgba(0,0,0,0.04) 41px),
+    repeating-linear-gradient(90deg, transparent, transparent 40px, rgba(0,0,0,0.04) 40px, rgba(0,0,0,0.04) 41px);
+  min-height: 100vh;
+  font-family: 'Lato', sans-serif;
+  color: #f0e6c8;
+}
+::-webkit-scrollbar { width: 4px; }
+::-webkit-scrollbar-track { background: #0f2d1b; }
+::-webkit-scrollbar-thumb { background: #c9a84c; border-radius: 4px; }
+select option { background: #1a3d28; }
+input[type=range] { accent-color: #c9a84c; width: 100%; }
+@keyframes fadeUp { from { opacity:0; transform:translateY(6px); } to { opacity:1; transform:none; } }
+@keyframes pulse { 0%,100% { opacity:.6; } 50% { opacity:1; } }
+.page { animation: fadeUp .25s ease; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const { useState, useEffect, useRef } = React;
+
+// ── UTILS ─────────────────────────────────────────────────────────────────────
+const uid = () => Math.random().toString(36).slice(2, 9);
+const todayStr = () => new Date().toLocaleDateString("it-IT");
+
+const nextRaggioName = (raggi) => {
+  const nums = (raggi || []).map(r => {
+    const s = r.nome || "";
+    if (s.startsWith("Raggio")) {
+      const n = parseInt(s.slice(6), 10);
+      return isNaN(n) ? -1 : n;
+    }
+    return -1;
+  }).filter(n => n >= 100);
+  const max = nums.length > 0 ? Math.max(...nums) : 99;
+  return "Raggio" + String(max + 1).padStart(3, "0");
+};
+
+function calcPoints(type, cappotto, soglia, callerWon) {
+  const isAlone = type === "mano" || type === "carichi";
+  const base = isAlone ? 4 : 2;
+  const sogl = soglia >= 81 ? 3 : soglia >= 71 ? 2 : 1;
+  const mult = sogl * (cappotto ? 2 : 1);
+  if (callerWon) return { caller: base * mult, partner: isAlone ? 0 : mult, opponent: -mult };
+  return { caller: -(base * mult), partner: isAlone ? 0 : -mult, opponent: mult };
+}
+
+function sumPts(pid, games) {
+  return (games || []).reduce((a, g) => a + (g.pm ? (g.pm[pid] || 0) : 0), 0);
+}
+
+// ── DESIGN TOKENS ─────────────────────────────────────────────────────────────
+const C = {
+  felt:   "#1a4a2e",
+  dark:   "#0f2d1b",
+  darker: "#091a10",
+  panel:  "#163822",
+  border: "#2a5c3c",
+  gold:   "#c9a84c",
+  goldL:  "#e8c96e",
+  goldD:  "#8a6e28",
+  cream:  "#f0e6c8",
+  muted:  "#6a9e75",
+  red:    "#c0392b",
+  green:  "#27ae60",
+  purple: "#8e44ad",
+};
+
+const panel = {
+  background: "linear-gradient(160deg, rgba(30,70,45,0.95), rgba(18,50,30,0.95))",
+  border: "1px solid " + C.border,
+  borderRadius: 12,
+  padding: 16,
+  boxShadow: "0 4px 20px rgba(0,0,0,0.5), inset 0 1px 0 rgba(201,168,76,0.08)",
+};
+
+const panelGold = {
+  ...panel,
+  border: "1px solid " + C.gold + "88",
+  boxShadow: "0 4px 20px rgba(0,0,0,0.5), 0 0 14px rgba(201,168,76,0.12), inset 0 1px 0 rgba(201,168,76,0.15)",
+};
+
+const btnP = {
+  background: "linear-gradient(135deg, #7a5e1e, #c9a84c, #7a5e1e)",
+  color: "#1a0e00", border: "1px solid " + C.goldD,
+  borderRadius: 8, padding: "12px 20px",
+  fontWeight: 700, fontSize: 12, cursor: "pointer",
+  fontFamily: "'Lato',sans-serif", letterSpacing: 1,
+  textTransform: "uppercase", boxShadow: "0 3px 10px rgba(0,0,0,0.4)",
+};
+
+const btnG = (col) => ({
+  background: "rgba(0,0,0,0.25)", color: col || C.gold,
+  border: "1px solid " + (col || C.gold) + "44",
+  borderRadius: 8, padding: "10px 14px",
+  fontWeight: 700, fontSize: 11, cursor: "pointer",
+  fontFamily: "'Lato',sans-serif", width: "100%", letterSpacing: 0.5,
+});
+
+const btnD = {
+  background: "transparent", color: C.red,
+  border: "1px solid " + C.red + "44",
+  borderRadius: 6, padding: "5px 11px",
+  fontWeight: 700, fontSize: 12, cursor: "pointer",
+  fontFamily: "'Lato',sans-serif",
+};
+
+const inp = {
+  background: "rgba(0,0,0,0.35)", border: "1px solid " + C.border,
+  borderRadius: 8, color: C.cream, padding: "11px 14px",
+  fontSize: 14, outline: "none",
+  fontFamily: "'Lato',sans-serif", width: "100%",
+};
+
+// ── MICRO COMPONENTS ──────────────────────────────────────────────────────────
+const Pts = ({ v, size }) => (
+  <span style={{ fontWeight: 700, fontSize: size || 15, color: v > 0 ? C.green : v < 0 ? C.red : C.muted }}>
+    {v > 0 ? "+" : ""}{v}
+  </span>
+);
+
+const Badge = ({ children, color }) => (
+  <span style={{
+    background: (color || C.gold) + "1a", color: color || C.gold,
+    border: "1px solid " + (color || C.gold) + "44",
+    borderRadius: 4, padding: "2px 7px", fontSize: 10,
+    fontWeight: 700, letterSpacing: 0.5,
+  }}>{children}</span>
+);
+
+const Divider = () => (
+  <div style={{ display: "flex", alignItems: "center", gap: 8, margin: "18px 0" }}>
+    <div style={{ flex: 1, height: 1, background: "linear-gradient(90deg,transparent," + C.border + ")" }} />
+    <span style={{ color: C.goldD, fontSize: 12, letterSpacing: 6 }}>♠♥♦♣</span>
+    <div style={{ flex: 1, height: 1, background: "linear-gradient(90deg," + C.border + ",transparent)" }} />
+  </div>
+);
+
+// ── DIALOGS ───────────────────────────────────────────────────────────────────
+function Confirm({ title, msg, onOk, onCancel }) {
+  return (
+    <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,.78)", zIndex:9000, display:"flex", alignItems:"center", justifyContent:"center", padding:20 }}>
+      <div style={{ ...panelGold, maxWidth:320, width:"100%", textAlign:"center" }}>
+        <div style={{ fontSize:36, marginBottom:12 }}>⚠️</div>
+        <div style={{ color:C.gold, fontFamily:"'Cinzel',serif", fontWeight:700, fontSize:16, marginBottom:10 }}>{title}</div>
+        <div style={{ color:C.cream, fontSize:13, lineHeight:1.7, marginBottom:22, opacity:.85 }}>{msg}</div>
+        <div style={{ display:"flex", gap:8 }}>
+          <button onClick={onCancel} style={{ ...btnG(C.muted), flex:1 }}>Annulla</button>
+          <button onClick={onOk} style={{ ...btnP, flex:1 }}>Conferma</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function Info({ title, lines, onOk }) {
+  return (
+    <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,.78)", zIndex:9000, display:"flex", alignItems:"center", justifyContent:"center", padding:20 }}>
+      <div style={{ ...panelGold, maxWidth:320, width:"100%", textAlign:"center" }}>
+        <div style={{ fontSize:36, marginBottom:12 }}>✅</div>
+        <div style={{ color:C.gold, fontFamily:"'Cinzel',serif", fontWeight:700, fontSize:16, marginBottom:12 }}>{title}</div>
+        <div style={{ textAlign:"left", marginBottom:20 }}>
+          {(lines || []).map((l, i) => (
+            <div key={i} style={{ color:l.startsWith("─") ? C.muted : C.cream, fontSize:13, padding:"4px 0", borderBottom:i < lines.length-1 ? "1px solid " + C.border : "none", opacity:l.startsWith("─") ? .4 : .9 }}>{l}</div>
+          ))}
+        </div>
+        <button onClick={onOk} style={{ ...btnP, width:"100%" }}>OK</button>
+      </div>
+    </div>
+  );
+}
+
+function Modal({ title, onClose, children }) {
+  return (
+    <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,.8)", zIndex:5000, display:"flex", alignItems:"center", justifyContent:"center", padding:16 }} onClick={onClose}>
+      <div style={{ ...panelGold, maxWidth:440, width:"100%", maxHeight:"85vh", overflowY:"auto" }} onClick={e => e.stopPropagation()}>
+        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:18 }}>
+          <span style={{ color:C.gold, fontFamily:"'Cinzel',serif", fontWeight:700, fontSize:15 }}>{title}</span>
+          <button onClick={onClose} style={{ background:"none", border:"none", color:C.muted, fontSize:22, cursor:"pointer" }}>✕</button>
+        </div>
+        {children}
+      </div>
+    </div>
+  );
+}
+
+// ── FIREBASE ──────────────────────────────────────────────────────────────────
+function useFirebase(loadDb) {
+  const [status, setStatus] = useState("connecting");
+  const unsubRef = useRef(null);
+
+  useEffect(() => {
+    const init = () => {
+      setStatus("ok");
+      unsubRef.current = window.__fbListen(loadDb);
+    };
+    if (window.__fbReady) init();
+    else window.addEventListener("fbReady", init, { once: true });
+    const t = setTimeout(() => setStatus(s => s === "connecting" ? "disabled" : s), 6000);
+    return () => { clearTimeout(t); if (unsubRef.current) unsubRef.current(); };
+  }, []);
+
+  const save = async (data) => {
+    if (status !== "ok") return;
+    setStatus("saving");
+    const ok = await window.__fbSave(data);
+    setStatus(ok ? "ok" : "error");
+    if (!ok) setTimeout(() => setStatus("ok"), 3000);
+  };
+
+  return { status, save };
+}
+
+function FbBadge({ status }) {
+  const map = {
+    connecting: { col: C.gold,   icon: "⏳", txt: "connessione" },
+    ok:         { col: C.green,  icon: "●",  txt: "live" },
+    saving:     { col: C.gold,   icon: "↑",  txt: "salvo..." },
+    error:      { col: C.red,    icon: "✕",  txt: "errore" },
+    disabled:   { col: C.muted,  icon: "○",  txt: "locale" },
+  };
+  const c = map[status] || map.disabled;
+  return (
+    <div style={{ display:"flex", alignItems:"center", gap:5, background:"rgba(0,0,0,.35)", border:"1px solid " + c.col + "44", borderRadius:20, padding:"4px 10px" }}>
+      <span style={{ fontSize:10, color:c.col, animation:status==="ok" ? "pulse 2s infinite" : "none" }}>{c.icon}</span>
+      <span style={{ fontSize:10, fontWeight:700, color:c.col, letterSpacing:1 }}>{c.txt.toUpperCase()}</span>
+    </div>
+  );
+}
+
+// ── RANK LIST ─────────────────────────────────────────────────────────────────
+function Avatar({ p, size }) {
+  const s = size || 36;
+  return (
+    <div style={{ width:s, height:s, borderRadius:"50%", flexShrink:0, overflow:"hidden", border:"2px solid rgba(201,168,76,.4)", display:"flex", alignItems:"center", justifyContent:"center", background:"rgba(0,0,0,.35)", fontSize:p&&p.photoUrl?"inherit":p&&p.emoji?s*.55:s*.45, fontWeight:900, color:"#fff" }}>
+      {p && p.photoUrl
+        ? <img src={p.photoUrl} alt={p.name||""} style={{ width:"100%", height:"100%", objectFit:"cover" }} onError={e=>{e.target.style.display="none";}} />
+        : (p && p.emoji) || (p && p.name ? p.name[0].toUpperCase() : "?")}
+    </div>
+  );
+}
+
+function RankList({ rows }) {
+  if (!rows || !rows.length) return (
+    <div style={{ textAlign:"center", padding:"36px 0", color:C.muted, fontSize:13 }}>
+      <div style={{ fontSize:36, marginBottom:8, opacity:.5 }}>🎰</div>
+      Nessuna partita ancora.
+    </div>
+  );
+  const medals = ["🥇","🥈","🥉"];
+  return (
+    <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
+      {rows.map((r, i) => (
+        <div key={r.id || i} style={{
+          display:"flex", alignItems:"center", gap:12, padding:"12px 14px",
+          background: i===0 ? "linear-gradient(135deg,rgba(60,100,55,.9),rgba(35,75,45,.9))" : "linear-gradient(135deg,rgba(25,60,38,.9),rgba(18,48,28,.9))",
+          border:"1px solid " + (i===0 ? C.gold : C.border),
+          borderRadius:10,
+          boxShadow: i===0 ? "0 0 18px rgba(201,168,76,.18)" : "0 2px 8px rgba(0,0,0,.3)",
+        }}>
+          <span style={{ fontSize:16, width:24, textAlign:"center", flexShrink:0, opacity:.8 }}>{medals[i] || ("#"+(i+1))}</span>
+          <Avatar p={r} size={38} />
+          <div style={{ flex:1 }}>
+            <div style={{ color:i===0 ? C.goldL : C.cream, fontWeight:700, fontSize:14 }}>{r.name}</div>
+            {r.sub && <div style={{ color:C.muted, fontSize:11, marginTop:2 }}>{r.sub}</div>}
+          </div>
+          <Pts v={r.pts} size={17} />
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function ProgBar({ name, pts }) {
+  const m = 15;
+  const pct = Math.min(100, Math.max(0, pts / m * 100));
+  const col = pts >= m ? C.green : pts >= m * .65 ? C.gold : C.muted;
+  return (
+    <div style={{ marginBottom:10 }}>
+      <div style={{ display:"flex", justifyContent:"space-between", fontSize:12, marginBottom:4 }}>
+        <span style={{ color:C.cream }}>{name}</span>
+        <span style={{ fontWeight:700, color:col }}>{pts}/{m}</span>
+      </div>
+      <div style={{ background:"rgba(0,0,0,.4)", borderRadius:4, height:6, overflow:"hidden", border:"1px solid " + C.border }}>
+        <div style={{ height:"100%", borderRadius:4, width:pct+"%", background:pts>=m ? C.green : "linear-gradient(90deg,"+C.goldD+","+C.gold+")", transition:"width .5s ease" }} />
+      </div>
+    </div>
+  );
+}
+
+// ── PAGE: CLASSIFICHE ─────────────────────────────────────────────────────────
+function PageClassifiche({ players, allGames, giornoGames, raggi, raggioCorrenteNome, onChiudiRaggio }) {
+  const [tab, setTab] = useState("raggio");
+
+  const [inclStorici, setInclStorici] = useState(false);
+  const av = p => ({ emoji: p.emoji||"", photoUrl: p.photoUrl||"" });
+  const raggioGames = allGames.filter(g => g.raggio === raggioCorrenteNome);
+
+  const giornoRows = players
+    .filter(p => giornoGames.some(g => g.pids && g.pids.includes(p.id)))
+    .map(p => ({ id:p.id, name:p.name, pts:sumPts(p.id, giornoGames), ...av(p) }))
+    .sort((a,b) => b.pts - a.pts);
+
+  const raggioRows = players
+    .filter(p => raggioGames.some(g => g.pids && g.pids.includes(p.id)))
+    .map(p => ({ id:p.id, name:p.name, pts:sumPts(p.id, raggioGames), sub:raggioGames.filter(g => g.pids && g.pids.includes(p.id)).length + " partite", ...av(p) }))
+    .sort((a,b) => b.pts - a.pts);
+
+  const genRows = players
+    .map(p => {
+      const mg = allGames.filter(g => g.pids && g.pids.includes(p.id));
+      const won = mg.filter(g => (g.pm ? (g.pm[p.id]||0) : 0) > 0).length;
+      const pts = sumPts(p.id, allGames) + (inclStorici ? (p.storiciPunti || 0) : 0);
+      const raggiVinti = (raggi||[]).filter(r=>r.winner===p.name).length + (inclStorici ? (p.storiciRaggi||0) : 0);
+      const displayName = p.nickname ? p.name + ' "' + p.nickname + '"' : p.name;
+      return { id:p.id, name:displayName, pts, sub:mg.length+" partite · "+(mg.length ? Math.round(won/mg.length*100) : 0)+"% vinte · 🏆 "+raggiVinti, ...av(p) };
+    })
+    .filter(r => allGames.some(g => g.pids && g.pids.includes(r.id)))
+    .sort((a,b) => b.pts - a.pts);
+
+  const TABS = [
+    { id:"giorno",   label:"☀️ Oggi" },
+    { id:"raggio",   label:"⚡ Raggio" },
+    { id:"generale", label:"🏆 All Time" },
+    { id:"storia",   label:"📚 Archivio" },
+  ];
+
+  return (
+    <div className="page">
+      <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:20 }}>
+        <span style={{ fontSize:26 }}>🏆</span>
+        <h2 style={{ color:C.gold, fontFamily:"'Cinzel',serif", fontSize:19, letterSpacing:2 }}>CLASSIFICHE</h2>
+      </div>
+      <div style={{ display:"flex", gap:6, marginBottom:18, overflowX:"auto", paddingBottom:4 }}>
+        {TABS.map(t => (
+          <button key={t.id} onClick={() => setTab(t.id)} style={{
+            padding:"8px 14px", borderRadius:20, cursor:"pointer", whiteSpace:"nowrap",
+            fontWeight:700, fontSize:11, fontFamily:"'Lato',sans-serif", letterSpacing:1,
+            background:tab===t.id ? "linear-gradient(135deg,"+C.goldD+","+C.gold+")" : "rgba(0,0,0,.3)",
+            color:tab===t.id ? "#1a0e00" : C.muted,
+            border:"1px solid " + (tab===t.id ? C.gold : C.border),
+          }}>{t.label}</button>
+        ))}
+      </div>
+
+      {tab==="giorno" && (
+        <div>
+          <div style={{ color:C.muted, fontSize:12, marginBottom:14 }}>Partite di oggi · {giornoGames.length} giocate</div>
+          <RankList rows={giornoRows} />
+        </div>
+      )}
+
+      {tab==="raggio" && (
+        <div>
+          {raggioRows[0] && raggioRows[0].pts >= 12 && (
+            <div style={{ background:"rgba(201,168,76,.1)", border:"1px solid "+C.gold+"66", borderRadius:8, padding:"10px 14px", marginBottom:14, display:"flex", gap:10, alignItems:"center" }}>
+              <span>⚠️</span>
+              <span style={{ color:C.gold, fontSize:13, fontWeight:700 }}>{raggioRows[0].name} è a {raggioRows[0].pts} punti!</span>
+            </div>
+          )}
+          <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:14 }}>
+            <div style={{ color:C.muted, fontSize:12 }}>{raggioCorrenteNome} · {raggioGames.length} partite</div>
+            <Badge color={C.gold}>Soglia 15 pt</Badge>
+          </div>
+          <RankList rows={raggioRows} />
+          {raggioRows.length > 0 && (
+            <div style={{ ...panel, marginTop:14 }}>
+              <div style={{ color:C.gold, fontSize:10, letterSpacing:2, marginBottom:12, opacity:.7 }}>PROGRESSIONE</div>
+              {raggioRows.map(r => <ProgBar key={r.id} name={r.name} pts={r.pts} />)}
+            </div>
+          )}
+          <button onClick={onChiudiRaggio} style={{ ...btnP, width:"100%", marginTop:14, padding:14, background:"linear-gradient(135deg,#4a0f6e,#8e44ad)", color:"#fff", border:"1px solid #8e44ad" }}>
+            🏁 CHIUDI RAGGIO
+          </button>
+        </div>
+      )}
+
+      {tab==="generale" && (
+        <div>
+          <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:14 }}>
+            <div style={{ color:C.muted, fontSize:12 }}>Classifica storica completa</div>
+            <button onClick={() => setInclStorici(v=>!v)} style={{
+              padding:"5px 12px", borderRadius:20, cursor:"pointer", fontFamily:"'Lato',sans-serif",
+              fontWeight:700, fontSize:11, letterSpacing:.5,
+              background: inclStorici ? C.gold+"22" : "rgba(0,0,0,.3)",
+              color: inclStorici ? C.gold : C.muted,
+              border:"1px solid " + (inclStorici ? C.gold : C.border),
+            }}>
+              {inclStorici ? "📚 Con storici" : "📊 Solo app"}
+            </button>
+          </div>
+          {inclStorici && (
+            <div style={{ background:"rgba(201,168,76,.08)", border:"1px solid "+C.gold+"33", borderRadius:7, padding:"7px 12px", marginBottom:12, color:C.gold, fontSize:11 }}>
+              ✨ Include punti e raggi inseriti manualmente
+            </div>
+          )}
+          <RankList rows={genRows} />
+        </div>
+      )}
+
+      {tab==="storia" && (
+        <div>
+          <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:14 }}>
+            <div style={{ color:C.muted, fontSize:12 }}>{raggi.length} raggi completati</div>
+            <button onClick={() => setInclStorici(v=>!v)} style={{
+              padding:"5px 12px", borderRadius:20, cursor:"pointer", fontFamily:"'Lato',sans-serif",
+              fontWeight:700, fontSize:11, letterSpacing:.5,
+              background: inclStorici ? C.gold+"22" : "rgba(0,0,0,.3)",
+              color: inclStorici ? C.gold : C.muted,
+              border:"1px solid " + (inclStorici ? C.gold : C.border),
+            }}>{inclStorici ? "📚 Con storici" : "📊 Solo app"}</button>
+          </div>
+          {raggi.length===0 && <div style={{ textAlign:"center", padding:40, color:C.muted }}><div style={{ fontSize:36, marginBottom:8, opacity:.4 }}>🎰</div>Nessun raggio completato.</div>}
+          {inclStorici && players.some(p => p.storiciRaggi > 0) && (
+            <div style={{ ...panel, marginBottom:14, border:"1px solid "+C.gold+"44" }}>
+              <div style={{ color:C.gold, fontSize:10, letterSpacing:2, marginBottom:10 }}>✨ RAGGI STORICI (manuali)</div>
+              {players.filter(p => p.storiciRaggi > 0).map(p => (
+                <div key={p.id} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"4px 0", borderBottom:"1px solid "+C.border+"44" }}>
+                  <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+                    <Avatar p={p} size={28} />
+                    <span style={{ color:C.cream, fontSize:13 }}>{p.name}</span>
+                  </div>
+                  <span style={{ color:C.gold, fontWeight:700 }}>🏆 {p.storiciRaggi}</span>
+                </div>
+              ))}
+            </div>
+          )}
+          {[...raggi].reverse().map((r, i) => (
+            <div key={r.id} style={{ ...panel, marginBottom:10 }}>
+              <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10 }}>
+                <span style={{ color:C.gold, fontFamily:"'Cinzel',serif", fontWeight:700, fontSize:13 }}>{r.nome || ("Raggio #"+(raggi.length-i))}</span>
+                <span style={{ color:C.muted, fontSize:11 }}>{r.startDate} → {r.endDate}</span>
+              </div>
+              {r.winner && (
+                <div style={{ background:"rgba(142,68,173,.15)", border:"1px solid "+C.purple+"44", borderRadius:6, padding:"8px 12px", marginBottom:8, display:"flex", gap:8, alignItems:"center" }}>
+                  <span>🏆</span><span style={{ color:"#c39bd3", fontWeight:700 }}>{r.winner} — {r.winnerPts} pt</span>
+                </div>
+              )}
+              {(r.scores || []).slice().sort((a,b)=>b.pts-a.pts).map(s => (
+                <div key={s.pid} style={{ display:"flex", justifyContent:"space-between", fontSize:13, padding:"3px 0", borderBottom:"1px solid "+C.border+"44" }}>
+                  <span style={{ color:C.cream }}>{s.name}</span><Pts v={s.pts} />
+                </div>
+              ))}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── PAGE: GIOCATORI ───────────────────────────────────────────────────────────
+function PageGiocatori({ players, setPlayers, addPlayer, onSavePlayers, allGames, raggi }) {
+  const [name, setName] = useState("");
+  const [editId, setEditId] = useState(null);
+  const [editForm, setEditForm] = useState({});
+
+  const avatarColors = [C.red, "#2980b9", C.goldD, C.green, C.purple, "#e67e22"];
+
+  const stats = players.map(p => {
+    const mg = allGames.filter(g => g.pids && g.pids.includes(p.id));
+    const won = mg.filter(g => (g.pm ? (g.pm[p.id]||0) : 0) > 0).length;
+    const raggiVinti = ((raggi || []).filter(r => r.winner === p.name).length) + (p.storiciRaggi || 0);
+    const totalPts = sumPts(p.id, allGames) + (p.storiciPunti || 0);
+    return { ...p, played:mg.length, won, lost:mg.filter(g=>(g.pm?(g.pm[p.id]||0):0)<0).length,
+      totalPts, asCaller:mg.filter(g=>g.callerId===p.id).length,
+      asPartner:mg.filter(g=>g.partnerId===p.id).length,
+      winRate:mg.length ? Math.round(won/mg.length*100) : 0, raggiVinti };
+  });
+
+  const [viewId, setViewId] = useState(null);
+  const [deleteId, setDeleteId] = useState(null);
+  const view = stats.find(p => p.id === viewId);
+  const toDelete = stats.find(p => p.id === deleteId);
+
+  const add = () => {
+    const n = name.trim();
+    if (!n || players.find(p => p.name.toLowerCase()===n.toLowerCase())) return;
+    addPlayer({ id:uid(), name:n, nickname:"", storiciPunti:0, storiciRaggi:0 });
+    setName("");
+  };
+
+  const [emojiPicker, setEmojiPicker] = useState(false);
+  const EMOJI_CATS = [
+    { label:"😀 Facce", emojis:["😀","😃","😄","😁","😆","😅","🤣","😂","🙂","😊","😇","🥰","😍","🤩","😘","😎","🤠","🥸","🧐","🤓","😈","👿","👹","👺","💀","☠️","🤡","👻","👾","🤖","🎭","🥷"] },
+    { label:"🐯 Animali", emojis:["🐯","🦁","🐻","🐼","🦊","🐺","🦝","🐸","🐙","🦄","🐉","🦅","🦆","🦉","🦋","🐝","🦈","🐬","🐘","🦏","🦍","🐆","🐅","🦓","🐊","🦕","🦖","🦑","🐓","🦃","🦚","🦜"] },
+    { label:"👑 Simboli gioco", emojis:["👑","🎩","🃏","♠️","♥️","♦️","♣️","🎰","🍀","⚡","🔥","💎","🏆","⚔️","🗡️","🛡️","💣","🎯","🎲","🀄","🎴","🧩","🎪","🎠","🎡","🤺","🏹","🪃","🔮","🧿","🪬","💫"] },
+    { label:"⚽ Sport", emojis:["⚽","🏀","🏈","⚾","🎾","🏐","🏉","🎱","🏓","🏸","🥊","🥋","🤼","🏋️","🤸","⛷️","🏂","🏇","🚴","🤾","🧗","🤺","🥇","🥈","🥉","🏆","🎖️","🏅","🎗️","🎀","🎁","🎊"] },
+    { label:"🌙 Natura", emojis:["🌙","⭐","🌟","💫","✨","☄️","🌈","⛈️","🌊","🌋","🏔️","🌵","🌴","🍄","🌹","🌺","🌸","🌼","🌻","🍀","🍁","🍂","🌾","🐚","🪸","🌍","🌙","☀️","🌤️","🌪️","❄️","🔥"] },
+    { label:"💎 Oggetti", emojis:["💎","💍","👒","🎭","🪄","🔮","🧿","💰","💵","💳","🗝️","🔑","🪙","📿","🧲","⚙️","🔧","🪛","🔩","🪝","🧨","🪬","🪩","🎸","🎺","🎻","🥁","🎷","🎹","🪗","🎤","🎧"] },
+  ];
+
+  const openEdit = (p) => {
+    setEditId(p.id);
+    setEditForm({ name:p.name, nickname:p.nickname||"", storiciPunti:p.storiciPunti||0, storiciRaggi:p.storiciRaggi||0, emoji:p.emoji||"", photoUrl:p.photoUrl||"" });
+    setEmojiPicker(false);
+  };
+
+  const saveEdit = () => {
+    const n = editForm.name.trim();
+    if (!n) return;
+    setPlayers(ps => ps.map(p => p.id===editId ? {
+      ...p,
+      name: n,
+      nickname: editForm.nickname.trim(),
+      storiciPunti: parseInt(editForm.storiciPunti, 10) || 0,
+      storiciRaggi: parseInt(editForm.storiciRaggi, 10) || 0,
+      emoji: editForm.emoji || "",
+      photoUrl: editForm.photoUrl.trim() || "",
+    } : p));
+    setEditId(null);
+    setEmojiPicker(false);
+  };
+
+  const ef = (key) => (e) => setEditForm(f => ({...f, [key]: e.target.value}));
+
+  return (
+    <div className="page">
+      <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:20 }}>
+        <span style={{ fontSize:26 }}>♟️</span>
+        <h2 style={{ color:C.gold, fontFamily:"'Cinzel',serif", fontSize:19, letterSpacing:2 }}>GIOCATORI</h2>
+      </div>
+      <div style={{ display:"flex", gap:8, marginBottom:18 }}>
+        <input value={name} onChange={e=>setName(e.target.value)} onKeyDown={e=>e.key==="Enter"&&add()} placeholder="Nome giocatore..." style={inp} />
+        <button onClick={add} style={{ ...btnP, flexShrink:0, padding:"12px 18px" }}>+</button>
+      </div>
+      <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
+        {stats.map((p, idx) => (
+          <div key={p.id} style={{ ...panel, display:"flex", alignItems:"center", gap:12 }}>
+            <div style={{ width:44, height:44, borderRadius:"50%", flexShrink:0, overflow:"hidden", boxShadow:"0 3px 10px rgba(0,0,0,.5)", border:"2px solid "+avatarColors[idx%avatarColors.length] }}>
+              {p.photoUrl
+                ? <img src={p.photoUrl} alt={p.name} style={{ width:"100%", height:"100%", objectFit:"cover" }} onError={e=>{e.target.style.display="none"; e.target.parentNode.style.background=avatarColors[idx%avatarColors.length];}} />
+                : <div style={{ width:"100%", height:"100%", background:avatarColors[idx%avatarColors.length], display:"flex", alignItems:"center", justifyContent:"center", fontSize:p.emoji?22:17, fontWeight:900, color:"#fff" }}>
+                    {p.emoji || p.name[0].toUpperCase()}
+                  </div>
+              }
+            </div>
+            <div style={{ flex:1, minWidth:0, cursor:"pointer" }} onClick={() => setViewId(p.id)}>
+              <div style={{ color:C.cream, fontWeight:700 }}>
+                {p.name}
+                {p.nickname ? <span style={{ color:C.gold, fontSize:12, fontWeight:400, marginLeft:6 }}>"{p.nickname}"</span> : null}
+              </div>
+              <div style={{ color:C.muted, fontSize:11, marginTop:2 }}>
+                {p.played} partite · {p.winRate}% vinte{p.raggiVinti > 0 ? " · 🏆 "+p.raggiVinti : ""}
+                {p.storiciPunti ? <span style={{ color:C.goldD }}> · +{p.storiciPunti}pt storici</span> : null}
+              </div>
+            </div>
+            <Pts v={p.totalPts} />
+            <button onClick={() => openEdit(p)} style={{ ...btnG(C.gold), width:"auto", padding:"6px 10px", fontSize:14 }}>✏️</button>
+            <button onClick={e=>{e.stopPropagation(); setDeleteId(p.id);}} style={btnD}>✕</button>
+          </div>
+        ))}
+      </div>
+
+      {view && (
+        <Modal title={view.name + (view.nickname ? ' "'+view.nickname+'"' : "")} onClose={() => setViewId(null)}>
+          <div style={{ display:"flex", justifyContent:"center", marginBottom:16 }}>
+            <div style={{ width:72, height:72, borderRadius:"50%", border:"3px solid "+C.gold, overflow:"hidden", display:"flex", alignItems:"center", justifyContent:"center", background:"rgba(0,0,0,.3)", fontSize:view.photoUrl?"inherit":view.emoji?36:28, fontWeight:900, color:"#fff", boxShadow:"0 0 20px rgba(201,168,76,.25)" }}>
+              {view.photoUrl
+                ? <img src={view.photoUrl} alt={view.name} style={{ width:"100%", height:"100%", objectFit:"cover" }} />
+                : (view.emoji || view.name[0].toUpperCase())}
+            </div>
+          </div>
+          <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:10, marginBottom:14 }}>
+            {[["Partite",view.played,C.muted],["Vittorie",view.won,C.green],["Sconfitte",view.lost,C.red],
+              ["Punti",view.totalPts>0?"+"+view.totalPts:view.totalPts,C.gold],
+              ["Win %",view.winRate+"%",C.gold],["Raggi",view.raggiVinti+" 🏆",C.purple]].map(([l,v,c])=>(
+              <div key={l} style={{ textAlign:"center", background:"rgba(0,0,0,.3)", borderRadius:8, padding:"12px 6px", border:"1px solid "+C.border }}>
+                <div style={{ color:c, fontWeight:900, fontSize:20 }}>{v}</div>
+                <div style={{ color:C.muted, fontSize:10, marginTop:3, letterSpacing:.5 }}>{l.toUpperCase()}</div>
+              </div>
+            ))}
+          </div>
+          <div style={{ color:C.muted, fontSize:12, textAlign:"center", marginBottom:14 }}>Chiamante {view.asCaller}× · Socio {view.asPartner}×</div>
+          <button onClick={() => { setViewId(null); openEdit(players.find(p=>p.id===view.id)); }} style={{ ...btnG(C.gold), width:"auto", padding:"8px 18px" }}>✏️ Modifica</button>
+        </Modal>
+      )}
+
+      {stats.length > 0 && (
+        <button onClick={onSavePlayers} style={{ ...btnP, width:"100%", marginTop:16, background:"linear-gradient(135deg,#1a5c2a,#27ae60)", border:"1px solid "+C.green, color:"#fff" }}>
+          ☁️ SALVA GIOCATORI SU FIREBASE
+        </button>
+      )}
+
+      {toDelete && (
+        <Confirm
+          title={"Elimina " + toDelete.name + "?"}
+          msg={"Verranno rimossi il giocatore e tutti i suoi dati dalla lista. Le partite già registrate non verranno cancellate."}
+          onOk={() => { setPlayers(ps => ps.filter(x => x.id !== deleteId)); setDeleteId(null); }}
+          onCancel={() => setDeleteId(null)}
+        />
+      )}
+
+      {editId && (
+        <Modal title="✏️ Modifica Giocatore" onClose={() => setEditId(null)}>
+          <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
+
+            <div style={{ ...panel, background:"rgba(0,0,0,.25)" }}>
+              <div style={{ color:C.gold, fontSize:10, letterSpacing:2, marginBottom:12 }}>AVATAR</div>
+              <div style={{ display:"flex", gap:12, alignItems:"center", marginBottom:12 }}>
+                <div style={{ width:56, height:56, borderRadius:"50%", border:"2px solid "+C.gold, overflow:"hidden", flexShrink:0, display:"flex", alignItems:"center", justifyContent:"center", background:"rgba(0,0,0,.3)", fontSize:editForm.emoji&&!editForm.photoUrl?28:20, fontWeight:900, color:"#fff" }}>
+                  {editForm.photoUrl
+                    ? <img src={editForm.photoUrl} alt="" style={{ width:"100%", height:"100%", objectFit:"cover" }} onError={e=>{e.target.style.display="none";}} />
+                    : (editForm.emoji || "👤")}
+                </div>
+                <div style={{ flex:1 }}>
+                  <div style={{ color:C.muted, fontSize:11, marginBottom:4 }}>Emoji selezionata: <strong style={{ color:C.cream }}>{editForm.emoji||"—"}</strong></div>
+                  <button onClick={()=>setEmojiPicker(v=>!v)} style={{ ...btnG(C.gold), width:"auto", padding:"6px 12px", fontSize:11 }}>
+                    {emojiPicker ? "✕ Chiudi" : "😀 Scegli emoji"}
+                  </button>
+                  {editForm.emoji && <button onClick={()=>setEditForm(f=>({...f,emoji:""}))} style={{ ...btnG(C.muted), width:"auto", padding:"6px 10px", fontSize:11, marginLeft:6 }}>✕</button>}
+                </div>
+              </div>
+              {emojiPicker && (
+                <div style={{ background:"rgba(0,0,0,.35)", borderRadius:8, marginBottom:10, border:"1px solid "+C.border, maxHeight:280, overflowY:"auto" }}>
+                  {EMOJI_CATS.map(cat => (
+                    <div key={cat.label} style={{ padding:"8px 10px", borderBottom:"1px solid "+C.border+"44" }}>
+                      <div style={{ color:C.muted, fontSize:10, letterSpacing:1, marginBottom:6 }}>{cat.label.toUpperCase()}</div>
+                      <div style={{ display:"flex", flexWrap:"wrap", gap:4 }}>
+                        {cat.emojis.map(e => (
+                          <button key={e} onClick={()=>{setEditForm(f=>({...f,emoji:e,photoUrl:""})); setEmojiPicker(false);}} style={{ background:editForm.emoji===e?"rgba(201,168,76,.35)":"transparent", border:"1px solid "+(editForm.emoji===e?C.gold:"transparent"), borderRadius:6, padding:"5px 6px", cursor:"pointer", fontSize:20, lineHeight:1 }}>{e}</button>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+              <div style={{ color:C.muted, fontSize:11, letterSpacing:1, marginBottom:5 }}>URL FOTO (sovrascrive emoji)</div>
+              <input value={editForm.photoUrl} onChange={e=>{ef("photoUrl")(e); setEditForm(f=>({...f,emoji:f.emoji}));}} placeholder="https://..." style={{ ...inp, fontSize:12 }} />
+              {editForm.photoUrl && <button onClick={()=>setEditForm(f=>({...f,photoUrl:""}))} style={{ ...btnG(C.muted), width:"auto", padding:"5px 10px", fontSize:11, marginTop:6 }}>✕ Rimuovi foto</button>}
+            </div>
+
+            <div>
+              <div style={{ color:C.muted, fontSize:11, letterSpacing:1, marginBottom:5 }}>NOME</div>
+              <input value={editForm.name} onChange={ef("name")} style={inp} />
+            </div>
+            <div>
+              <div style={{ color:C.muted, fontSize:11, letterSpacing:1, marginBottom:5 }}>SOPRANNOME</div>
+              <input value={editForm.nickname} onChange={ef("nickname")} placeholder='es. "Il Mago"' style={inp} />
+            </div>
+            <div style={{ ...panel, background:"rgba(0,0,0,.25)" }}>
+              <div style={{ color:C.gold, fontSize:10, letterSpacing:2, marginBottom:12 }}>VALORI STORICI (manuali)</div>
+              <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
+                <div>
+                  <div style={{ color:C.muted, fontSize:11, letterSpacing:1, marginBottom:5 }}>PUNTI STORICI</div>
+                  <input type="number" value={editForm.storiciPunti} onChange={ef("storiciPunti")} style={inp} />
+                </div>
+                <div>
+                  <div style={{ color:C.muted, fontSize:11, letterSpacing:1, marginBottom:5 }}>RAGGI STORICI</div>
+                  <input type="number" value={editForm.storiciRaggi} onChange={ef("storiciRaggi")} style={inp} />
+                </div>
+              </div>
+              <div style={{ color:C.muted, fontSize:11, marginTop:10, lineHeight:1.5, opacity:.8 }}>
+                Questi valori vengono sommati alle statistiche calcolate automaticamente.
+              </div>
+            </div>
+            <div style={{ display:"flex", gap:8, marginTop:4 }}>
+              <button onClick={() => setEditId(null)} style={{ ...btnG(C.muted), flex:1 }}>Annulla</button>
+              <button onClick={saveEdit} style={{ ...btnP, flex:2 }}>💾 Salva</button>
+            </div>
+          </div>
+        </Modal>
+      )}
+    </div>
+  );
+}
+
+
+// ── PAGE: DASHBOARD ───────────────────────────────────────────────────────────
+function PageDashboard({ players, allGames, raggi }) {
+  const [mode, setMode] = useState("assoluto"); // "assoluto" | "rapporto"
+
+  if (!allGames.length) return (
+    <div className="page">
+      <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:20 }}>
+        <span style={{ fontSize:26 }}>📊</span>
+        <h2 style={{ color:C.gold, fontFamily:"'Cinzel',serif", fontSize:19, letterSpacing:2 }}>STATISTICHE</h2>
+      </div>
+      <div style={{ textAlign:"center", padding:60, color:C.muted }}>
+        <div style={{ fontSize:40, marginBottom:10, opacity:.4 }}>📊</div>
+        Nessuna partita ancora.
+      </div>
+    </div>
+  );
+
+  const isRap = mode === "rapporto";
+
+  // Calcola stats per ogni giocatore
+  const stats = players.map(p => {
+    const giocate  = allGames.filter(g => g.pids && g.pids.includes(p.id));
+    const chiamate = allGames.filter(g => g.callerId === p.id);
+    const socio    = allGames.filter(g => g.partnerId === p.id);
+    const chiamateVinte  = chiamate.filter(g => g.callerWon);
+    const chiamatePerse  = chiamate.filter(g => !g.callerWon);
+    const socioVinte     = socio.filter(g => g.callerWon);
+    const avversario     = giocate.filter(g => g.callerId !== p.id && g.partnerId !== p.id);
+    const avversarioVinte= avversario.filter(g => !g.callerWon);
+    const punteggio      = sumPts(p.id, allGames);
+    const raggiVinti     = (raggi||[]).filter(r => r.winner === p.name).length;
+
+    // Cappotti subiti (era avversario e c'era cappotto e ha perso)
+    const cappottiSubiti = avversario.filter(g => g.cappotto && !g.callerWon).length;
+    const cappottiFatti  = chiamate.filter(g => g.cappotto && g.callerWon).length
+                         + socio.filter(g => g.cappotto && g.callerWon).length;
+
+    const n = giocate.length;
+    return {
+      p, n,
+      chiamate:       chiamate.length,
+      chiamateVinte:  chiamateVinte.length,
+      chiamatePerse:  chiamatePerse.length,
+      winRateChiamate: chiamate.length ? Math.round(chiamateVinte.length / chiamate.length * 100) : 0,
+      socio:          socio.length,
+      socioVinte:     socioVinte.length,
+      winRateSocio:   socio.length ? Math.round(socioVinte.length / socio.length * 100) : 0,
+      avversario:     avversario.length,
+      avversarioVinte:avversarioVinte.length,
+      winRateAvversario: avversario.length ? Math.round(avversarioVinte.length / avversario.length * 100) : 0,
+      punteggio,
+      raggiVinti,
+      cappottiFatti,
+      cappottiSubiti,
+      ptsPerPartita:  n ? (punteggio / n).toFixed(1) : "0",
+    };
+  }).filter(s => s.n > 0);
+
+  const fmt = (s, abs, pct) => isRap ? (pct !== undefined ? pct+"%" : abs+"/"+s.n) : abs;
+
+  // Sezioni della dashboard
+  const sections = [
+    {
+      title: "📣 Chi chiama di più?",
+      rows: [...stats].sort((a,b) => isRap
+        ? (b.chiamate/b.n - a.chiamate/a.n)
+        : (b.chiamate - a.chiamate)),
+      val: s => isRap ? Math.round(s.chiamate/s.n*100)+"%" : s.chiamate,
+      sub: s => s.chiamate+" chiamate · "+s.winRateChiamate+"% vinte",
+      color: C.gold,
+    },
+    {
+      title: "✅ Chiamante più vincente",
+      rows: [...stats].filter(s=>s.chiamate>0).sort((a,b) => b.winRateChiamate - a.winRateChiamate),
+      val: s => s.winRateChiamate+"%",
+      sub: s => s.chiamateVinte+"V / "+s.chiamatePerse+"P su "+s.chiamate+" chiamate",
+      color: C.green,
+    },
+    {
+      title: "🤝 Chi è più spesso socio?",
+      rows: [...stats].sort((a,b) => isRap
+        ? (b.socio/b.n - a.socio/a.n)
+        : (b.socio - a.socio)),
+      val: s => isRap ? Math.round(s.socio/s.n*100)+"%" : s.socio,
+      sub: s => s.socio+" volte socio · "+s.winRateSocio+"% vinte",
+      color: "#2980b9",
+    },
+    {
+      title: "🏅 Miglior socio (% vittorie)",
+      rows: [...stats].filter(s=>s.socio>0).sort((a,b) => b.winRateSocio - a.winRateSocio),
+      val: s => s.winRateSocio+"%",
+      sub: s => s.socioVinte+"V su "+s.socio+" volte socio",
+      color: C.green,
+    },
+    {
+      title: "⚔️ Miglior avversario",
+      rows: [...stats].filter(s=>s.avversario>0).sort((a,b) => b.winRateAvversario - a.winRateAvversario),
+      val: s => s.winRateAvversario+"%",
+      sub: s => s.avversarioVinte+" volte ha bloccato su "+s.avversario,
+      color: C.red,
+    },
+    {
+      title: "💰 Punti per partita",
+      rows: [...stats].sort((a,b) => parseFloat(b.ptsPerPartita) - parseFloat(a.ptsPerPartita)),
+      val: s => (parseFloat(s.ptsPerPartita)>0?"+":"")+s.ptsPerPartita,
+      sub: s => "Totale: "+(s.punteggio>0?"+":"")+s.punteggio+" pt in "+s.n+" partite",
+      color: C.gold,
+    },
+    {
+      title: "🎩 Cappotti",
+      rows: [...stats].sort((a,b) => isRap
+        ? (b.cappottiFatti/b.n - a.cappottiFatti/a.n)
+        : (b.cappottiFatti - a.cappottiFatti)),
+      val: s => isRap ? Math.round(s.cappottiFatti/s.n*100)+"%" : s.cappottiFatti,
+      sub: s => s.cappottiFatti+" fatti · "+s.cappottiSubiti+" subiti",
+      color: C.purple,
+    },
+    {
+      title: "🏆 Raggi vinti",
+      rows: [...stats].sort((a,b) => b.raggiVinti - a.raggiVinti),
+      val: s => s.raggiVinti,
+      sub: s => s.raggiVinti+" raggi in "+s.n+" partite",
+      color: C.gold,
+      hideIfZero: true,
+    },
+  ];
+
+  const StatCard = ({ section }) => {
+    const rows = section.hideIfZero ? section.rows.filter(s=>section.val(s)!==0&&section.val(s)!=="0%") : section.rows;
+    if (!rows.length) return null;
+    const best = rows[0];
+    return (
+      <div style={{ ...panel, marginBottom:12 }}>
+        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:12 }}>
+          <div style={{ color:C.gold, fontFamily:"'Cinzel',serif", fontSize:12, fontWeight:700, letterSpacing:.5 }}>{section.title}</div>
+        </div>
+        {rows.map((s, i) => {
+          const val = section.val(s);
+          const isFirst = i === 0;
+          const barMax = section.val(rows[0]);
+          const barNum = parseFloat(String(val).replace("%","").replace("+",""));
+          const barMaxNum = parseFloat(String(barMax).replace("%","").replace("+",""));
+          const barPct = barMaxNum > 0 ? Math.max(0, barNum / barMaxNum * 100) : 0;
+          return (
+            <div key={s.p.id} style={{ marginBottom: i < rows.length-1 ? 10 : 0 }}>
+              <div style={{ display:"flex", alignItems:"center", gap:10 }}>
+                <Avatar p={s.p} size={32} />
+                <div style={{ flex:1, minWidth:0 }}>
+                  <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:3 }}>
+                    <span style={{ color: isFirst ? C.goldL : C.cream, fontWeight: isFirst ? 700 : 400, fontSize:13 }}>
+                      {s.p.name}{s.p.nickname ? <span style={{ color:C.muted, fontSize:11 }}> "{s.p.nickname}"</span> : null}
+                      {isFirst ? <span style={{ marginLeft:6, fontSize:12 }}>👑</span> : null}
+                    </span>
+                    <span style={{ color: section.color, fontWeight:700, fontSize:14, flexShrink:0, marginLeft:8 }}>{val}</span>
+                  </div>
+                  <div style={{ background:"rgba(0,0,0,.4)", borderRadius:3, height:4, overflow:"hidden" }}>
+                    <div style={{ height:"100%", borderRadius:3, width:barPct+"%", background:section.color, transition:"width .4s ease", opacity:.8 }} />
+                  </div>
+                  <div style={{ color:C.muted, fontSize:10, marginTop:3 }}>{section.sub(s)}</div>
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    );
+  };
+
+  // Statistiche globali in cima
+  const totPartite = allGames.length;
+  const totCappotti = allGames.filter(g=>g.cappotto).length;
+  const totChiamanti = allGames.filter(g=>g.callerWon).length;
+  const totRaggi = raggi.length;
+  const tipiChiamate = ["normale","mano","carichi"].map(t => ({
+    t, n: allGames.filter(g=>g.callType===t).length
+  }));
+
+  return (
+    <div className="page">
+      <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:16 }}>
+        <div style={{ display:"flex", alignItems:"center", gap:10 }}>
+          <span style={{ fontSize:26 }}>📊</span>
+          <h2 style={{ color:C.gold, fontFamily:"'Cinzel',serif", fontSize:19, letterSpacing:2 }}>STATISTICHE</h2>
+        </div>
+        <div style={{ display:"flex", gap:6 }}>
+          {[["assoluto","#"],["rapporto","%"]].map(([v,l]) => (
+            <button key={v} onClick={()=>setMode(v)} style={{
+              padding:"6px 14px", borderRadius:20, cursor:"pointer",
+              fontWeight:800, fontSize:13, fontFamily:"'Lato',sans-serif",
+              background: mode===v ? "linear-gradient(135deg,"+C.goldD+","+C.gold+")" : "rgba(0,0,0,.3)",
+              color: mode===v ? "#1a0e00" : C.muted,
+              border:"1px solid " + (mode===v ? C.gold : C.border),
+            }}>{l}</button>
+          ))}
+        </div>
+      </div>
+
+      {/* Sommario globale */}
+      <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:8, marginBottom:16 }}>
+        {[
+          ["Partite", totPartite, C.muted],
+          ["Vince chi chiama", Math.round(totChiamanti/totPartite*100)+"%", C.green],
+          ["Cappotti", totCappotti, C.purple],
+          ["Raggi chiusi", totRaggi, C.gold],
+        ].map(([l,v,c]) => (
+          <div key={l} style={{ textAlign:"center", background:"rgba(0,0,0,.3)", borderRadius:10, padding:"10px 4px", border:"1px solid "+C.border }}>
+            <div style={{ color:c, fontWeight:900, fontSize:18 }}>{v}</div>
+            <div style={{ color:C.muted, fontSize:9, marginTop:3, letterSpacing:.3, lineHeight:1.3 }}>{l.toUpperCase()}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* Tipi chiamata */}
+      <div style={{ ...panel, marginBottom:16 }}>
+        <div style={{ color:C.gold, fontFamily:"'Cinzel',serif", fontSize:12, fontWeight:700, letterSpacing:.5, marginBottom:10 }}>🎯 Distribuzione chiamate</div>
+        {tipiChiamate.map(({t,n}) => (
+          <div key={t} style={{ marginBottom:8 }}>
+            <div style={{ display:"flex", justifyContent:"space-between", fontSize:12, marginBottom:3 }}>
+              <span style={{ color:C.cream, textTransform:"capitalize" }}>{t}</span>
+              <span style={{ color:C.gold, fontWeight:700 }}>{n} <span style={{ color:C.muted, fontWeight:400 }}>({totPartite?Math.round(n/totPartite*100):0}%)</span></span>
+            </div>
+            <div style={{ background:"rgba(0,0,0,.4)", borderRadius:3, height:5, overflow:"hidden" }}>
+              <div style={{ height:"100%", borderRadius:3, width:(totPartite?n/totPartite*100:0)+"%", background:t==="normale"?C.gold:t==="mano"?C.red:C.purple }} />
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {sections.map((s,i) => <StatCard key={i} section={s} />)}
+    </div>
+  );
+}
+
+// ── PAGE: PARTITA ─────────────────────────────────────────────────────────────
+function PagePartita({ players, addGame, tableIds, setTableIds, giornoGames, allGames, raggioCorrenteNome, onChiudiRaggio, callerId, setCallerId, partnerId, setPartnerId, callType, setCallType, soglia, setSoglia, cappotto, setCappotto, callerWon, setCallerWon, date, setDate }) {
+
+  const toggleP = id => setTableIds(prev =>
+    prev.includes(id) ? prev.filter(x=>x!==id) : prev.length < 5 ? [...prev,id] : prev
+  );
+
+  const selPlayers = players.filter(p => tableIds.includes(p.id));
+  const isAlone = callType==="mano" || callType==="carichi";
+  const sogliaMult = soglia>=81 ? 3 : soglia>=71 ? 2 : 1;
+  const ready = tableIds.length===5;
+  const canSave = callerId && callerWon!==null && (isAlone || partnerId);
+  const reset = () => { setCallerId(""); setPartnerId(""); setCallType("normale"); setSoglia(61); setCappotto(false); setCallerWon(null); };
+
+  const save = () => {
+    if (!canSave) return;
+    const { caller, partner, opponent } = calcPoints(callType, cappotto, soglia, callerWon);
+    const pm = {};
+    tableIds.forEach(id => {
+      pm[id] = id===callerId ? caller : (id===partnerId&&!isAlone) ? partner : opponent;
+    });
+    addGame({ id:uid(), date, pids:tableIds, callerId, partnerId:isAlone?null:partnerId, callType, soglia, cappotto, callerWon, pm });
+    reset();
+  };
+
+  const preview = canSave ? calcPoints(callType, cappotto, soglia, callerWon) : null;
+
+  const oggi = todayStr();
+  const giornoRows = players
+    .filter(p => giornoGames.some(g => g.pids && g.pids.includes(p.id)))
+    .map(p => ({ id:p.id, name:p.name, pts:sumPts(p.id, giornoGames) }))
+    .sort((a,b) => b.pts-a.pts);
+
+  const raggioGames = allGames.filter(g => g.raggio===raggioCorrenteNome);
+  const raggioRows = players
+    .filter(p => raggioGames.some(g => g.pids && g.pids.includes(p.id)))
+    .map(p => ({ id:p.id, name:p.name, pts:sumPts(p.id, raggioGames) }))
+    .sort((a,b) => b.pts-a.pts);
+
+  return (
+    <div className="page">
+      <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:16 }}>
+        <span style={{ fontSize:26 }}>🃏</span>
+        <h2 style={{ color:C.gold, fontFamily:"'Cinzel',serif", fontSize:19, letterSpacing:2 }}>PARTITA</h2>
+      </div>
+
+      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, marginBottom:16 }}>
+        <div style={{ ...panel, padding:12 }}>
+          <div style={{ color:C.gold, fontWeight:700, fontSize:10, letterSpacing:2, marginBottom:8 }}>☀️ OGGI ({giornoGames.length})</div>
+          {giornoRows.length===0
+            ? <div style={{ color:C.muted, fontSize:11, padding:"6px 0", textAlign:"center" }}>—</div>
+            : giornoRows.map((r,i) => (
+              <div key={r.id} style={{ display:"flex", justifyContent:"space-between", fontSize:12, marginBottom:3 }}>
+                <span style={{ color:i===0?C.goldL:C.cream }}>{r.name}</span>
+                <Pts v={r.pts} size={12} />
+              </div>
+            ))}
+        </div>
+        <div style={{ ...panel, padding:12 }}>
+          <div style={{ color:"#c39bd3", fontWeight:700, fontSize:10, letterSpacing:1, marginBottom:8 }}>⚡ {raggioCorrenteNome}</div>
+          {raggioRows.length===0
+            ? <div style={{ color:C.muted, fontSize:11, padding:"6px 0", textAlign:"center" }}>—</div>
+            : raggioRows.map((r,i) => (
+              <div key={r.id} style={{ display:"flex", justifyContent:"space-between", fontSize:12, marginBottom:3 }}>
+                <span style={{ color:i===0?C.goldL:C.cream }}>{r.name}</span>
+                <span style={{ fontWeight:700, fontSize:12, color:r.pts>=15?C.green:r.pts>0?C.gold:r.pts<0?C.red:C.muted }}>{r.pts}/15</span>
+              </div>
+            ))}
+          <button onClick={onChiudiRaggio} style={{ ...btnG("#c39bd3"), marginTop:8, fontSize:10, padding:"6px 10px" }}>🏁 Chiudi</button>
+        </div>
+      </div>
+
+      <div style={{ ...panel, marginBottom:12 }}>
+        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:12 }}>
+          <span style={{ color:C.gold, fontWeight:700, fontSize:11, letterSpacing:1 }}>
+            {ready ? "🪑 TAVOLO" : "SCEGLI 5 GIOCATORI ("+tableIds.length+"/5)"}
+          </span>
+          {ready && <button onClick={()=>{setTableIds([]);reset();}} style={{ ...btnD, fontSize:11 }}>Cambia</button>}
+        </div>
+        <div style={{ display:"grid", gridTemplateColumns:"repeat(5,1fr)", gap:8 }}>
+          {players.map(p => {
+            const sel = tableIds.includes(p.id);
+            return (
+              <button key={p.id} onClick={() => toggleP(p.id)} style={{
+                padding:"10px 4px", borderRadius:10, cursor:"pointer",
+                fontFamily:"'Lato',sans-serif", border:"none", outline:"none",
+                opacity:ready && !sel ? 0.2 : 1,
+                background: sel ? "linear-gradient(160deg,"+C.goldD+","+C.gold+"88)" : "rgba(0,0,0,.3)",
+                border:"2px solid " + (sel ? C.gold : C.border),
+                boxShadow: sel ? "0 0 12px rgba(201,168,76,.35)" : "none",
+                display:"flex", flexDirection:"column", alignItems:"center", gap:5,
+                transition:"all .15s",
+              }}>
+                <div style={{ width:40, height:40, borderRadius:"50%", overflow:"hidden", border:"2px solid "+(sel?C.gold:C.border+"88"), display:"flex", alignItems:"center", justifyContent:"center", background:"rgba(0,0,0,.3)", fontSize:p.photoUrl?"inherit":p.emoji?22:16, fontWeight:900, color:"#fff", flexShrink:0 }}>
+                  {p.photoUrl
+                    ? <img src={p.photoUrl} alt={p.name} style={{ width:"100%", height:"100%", objectFit:"cover" }} onError={e=>{e.target.style.display="none";}} />
+                    : (p.emoji || p.name[0].toUpperCase())}
+                </div>
+                <div style={{ textAlign:"center", lineHeight:1.2 }}>
+                  <div style={{ color:sel?"#1a0e00":C.cream, fontWeight:700, fontSize:11, wordBreak:"break-word" }}>{p.name}</div>
+                  {p.nickname ? <div style={{ color:sel?"#3a2000":C.muted, fontSize:9, marginTop:1 }}>"{p.nickname}"</div> : null}
+                </div>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {ready && (
+        <div>
+          <div style={{ ...panel, marginBottom:12 }}>
+            <div style={{ color:C.gold, fontFamily:"'Cinzel',serif", fontWeight:700, marginBottom:16, letterSpacing:1, fontSize:13 }}>ASTA E CHIAMATA</div>
+            <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
+
+              <div style={{ display:"flex", gap:8, alignItems:"center" }}>
+                <span style={{ color:C.muted, fontSize:11, flexShrink:0, letterSpacing:.5 }}>DATA</span>
+                <input value={date} onChange={e=>setDate(e.target.value)} style={{ ...inp, width:130 }} />
+              </div>
+
+              <div>
+                <div style={{ color:C.muted, fontSize:11, letterSpacing:1, marginBottom:6 }}>CHI HA CHIAMATO?</div>
+                <select value={callerId} onChange={e=>setCallerId(e.target.value)} style={inp}>
+                  <option value="">— seleziona —</option>
+                  {selPlayers.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                </select>
+              </div>
+
+              <div>
+                <div style={{ color:C.muted, fontSize:11, letterSpacing:1, marginBottom:6 }}>TIPO CHIAMATA</div>
+                <div style={{ display:"flex", gap:7 }}>
+                  {[["normale","Normale"],["mano","In Mano"],["carichi","Carichi"]].map(([v,l]) => (
+                    <button key={v} onClick={() => setCallType(v)} style={{
+                      flex:1, padding:"10px 0", borderRadius:7, cursor:"pointer", fontWeight:700, fontSize:11, fontFamily:"'Lato',sans-serif", letterSpacing:.5,
+                      background:callType===v ? "linear-gradient(135deg,"+C.goldD+","+C.gold+")" : "rgba(0,0,0,.3)",
+                      color:callType===v ? "#1a0e00" : C.muted,
+                      border:"1px solid " + (callType===v ? C.gold : C.border),
+                    }}>{l}</button>
+                  ))}
+                </div>
+              </div>
+
+              {!isAlone && callerId && (
+                <div>
+                  <div style={{ color:C.muted, fontSize:11, letterSpacing:1, marginBottom:6 }}>SOCIO SEGRETO</div>
+                  <select value={partnerId} onChange={e=>setPartnerId(e.target.value)} style={inp}>
+                    <option value="">— seleziona —</option>
+                    {selPlayers.filter(p=>p.id!==callerId).map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                  </select>
+                </div>
+              )}
+
+              <div>
+                <div style={{ color:C.muted, fontSize:11, letterSpacing:1, marginBottom:6 }}>
+                  SOGLIA: <strong style={{ color:C.gold, fontSize:14 }}>{soglia}</strong>
+                  {sogliaMult>1 && <span style={{ marginLeft:8 }}><Badge color={sogliaMult===3?C.red:"#d4870a"}>{sogliaMult===2?"×2":"×3"}</Badge></span>}
+                </div>
+                <input type="range" min={61} max={120} value={soglia} onChange={e=>setSoglia(Number(e.target.value))} />
+                <div style={{ display:"flex", justifyContent:"space-between", color:C.muted, fontSize:10, marginTop:3 }}>
+                  <span>61</span><span>71 ×2</span><span>81 ×3</span><span>120</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {callerId && (isAlone || partnerId) && (
+            <div style={{ ...panel, marginBottom:12 }}>
+              <div style={{ color:C.gold, fontFamily:"'Cinzel',serif", fontWeight:700, marginBottom:14, letterSpacing:1, fontSize:13 }}>RISULTATO</div>
+
+              <div style={{ display:"flex", gap:8, marginBottom:14 }}>
+                {[[true,"✅ VINCE",C.green],[false,"❌ PERDE",C.red]].map(([v,l,col]) => (
+                  <button key={String(v)} onClick={() => setCallerWon(v)} style={{
+                    flex:1, padding:14, borderRadius:8, cursor:"pointer", fontWeight:800, fontSize:12, fontFamily:"'Lato',sans-serif", letterSpacing:1,
+                    background:callerWon===v ? col+"2a" : "rgba(0,0,0,.3)",
+                    color:callerWon===v ? col : C.muted,
+                    border:"2px solid " + (callerWon===v ? col : C.border),
+                    boxShadow:callerWon===v ? "0 0 12px "+col+"44" : "none",
+                  }}>{l}</button>
+                ))}
+              </div>
+
+              <button onClick={() => setCappotto(!cappotto)} style={{
+                padding:"10px 18px", borderRadius:7, cursor:"pointer", fontWeight:700, fontFamily:"'Lato',sans-serif", letterSpacing:.5, marginBottom:16,
+                background:cappotto ? C.purple+"2a" : "rgba(0,0,0,.3)",
+                color:cappotto ? "#c39bd3" : C.muted,
+                border:"1px solid " + (cappotto ? C.purple : C.border),
+              }}>🎩 Cappotto{cappotto ? " ×2" : ""}</button>
+
+              {preview && (
+                <div style={{ background:"rgba(0,0,0,.35)", borderRadius:8, padding:14, marginBottom:16, border:"1px solid "+C.border }}>
+                  {tableIds.map(id => {
+                    const p = players.find(x => x.id===id);
+                    const pt = id===callerId ? preview.caller : (id===partnerId&&!isAlone) ? preview.partner : preview.opponent;
+                    const role = id===callerId ? "chiamante" : (id===partnerId&&!isAlone) ? "socio" : "avversario";
+                    return (
+                      <div key={id} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"4px 0", borderBottom:"1px solid "+C.border+"44" }}>
+                        <span style={{ color:C.cream, fontSize:13 }}>{p?p.name:"?"} <span style={{ color:C.muted, fontSize:11 }}>({role})</span></span>
+                        <Pts v={pt} />
+                      </div>
+                    );
+                  })}
+                  <div style={{ marginTop:8, color:C.muted, fontSize:11, textAlign:"right" }}>
+                    Moltiplicatore: <strong style={{ color:C.gold }}>{sogliaMult*(cappotto?2:1)}×</strong>
+                  </div>
+                </div>
+              )}
+
+              <button onClick={save} disabled={!canSave} style={{ ...btnP, width:"100%", padding:15, fontSize:14, opacity:canSave?1:.4 }}>
+                💾 SALVA PARTITA
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── PAGE: STORICO ─────────────────────────────────────────────────────────────
+function PageStorico({ allGames, players, deleteGame }) {
+  const getName = id => { const p = players.find(x=>x.id===id); return p?p.name:"?"; };
+
+  const [showFilters, setShowFilters] = useState(false);
+  const [filterRaggio, setFilterRaggio] = useState("");
+  const [filterPlayers, setFilterPlayers] = useState([]);
+  const [filterDateFrom, setFilterDateFrom] = useState("");
+  const [filterDateTo, setFilterDateTo] = useState("");
+  const [filterEsito, setFilterEsito] = useState("");
+  const [filterTipo, setFilterTipo] = useState("");
+  const [filterMolt, setFilterMolt] = useState("");
+  const [sortBy, setSortBy] = useState("data_desc");
+
+  // Valori unici per filtri
+  const raggiList = [...new Set(allGames.map(g=>g.raggio||"").filter(Boolean))].sort();
+
+  const toggleFilterPlayer = id => setFilterPlayers(prev =>
+    prev.includes(id) ? prev.filter(x=>x!==id) : [...prev, id]
+  );
+
+  const resetFilters = () => {
+    setFilterRaggio(""); setFilterPlayers([]); setFilterDateFrom("");
+    setFilterDateTo(""); setFilterEsito(""); setFilterTipo(""); setFilterMolt("");
+  };
+
+  const hasFilters = filterRaggio||filterPlayers.length||filterDateFrom||filterDateTo||filterEsito||filterTipo||filterMolt;
+
+  // Converti data it-IT (gg/mm/aaaa) in stringa comparabile
+  const parseDate = d => {
+    if (!d) return "";
+    const parts = d.split("/");
+    return parts.length===3 ? parts[2]+"-"+parts[1]+"-"+parts[0] : d;
+  };
+
+  const filtered = allGames.filter(g => {
+    if (filterRaggio && g.raggio !== filterRaggio) return false;
+    if (filterPlayers.length && !filterPlayers.every(id => g.pids && g.pids.includes(id))) return false;
+    if (filterDateFrom && parseDate(g.date) < parseDate(filterDateFrom)) return false;
+    if (filterDateTo && parseDate(g.date) > parseDate(filterDateTo)) return false;
+    if (filterEsito === "vince" && !g.callerWon) return false;
+    if (filterEsito === "perde" && g.callerWon) return false;
+    if (filterTipo && g.callType !== filterTipo) return false;
+    if (filterMolt === "x1" && (g.soglia>=71||g.cappotto)) return false;
+    if (filterMolt === "x2" && !(g.soglia>=71&&g.soglia<81&&!g.cappotto)) return false;
+    if (filterMolt === "x3" && !(g.soglia>=81&&!g.cappotto)) return false;
+    if (filterMolt === "cappotto" && !g.cappotto) return false;
+    return true;
+  }).sort((a,b) => {
+    if (sortBy==="data_desc") return parseDate(b.date).localeCompare(parseDate(a.date));
+    if (sortBy==="data_asc")  return parseDate(a.date).localeCompare(parseDate(b.date));
+    return 0;
+  });
+
+  const chipBtn = (active, onClick, label, color) => (
+    <button onClick={onClick} style={{
+      padding:"5px 11px", borderRadius:20, cursor:"pointer", whiteSpace:"nowrap",
+      fontWeight:700, fontSize:11, fontFamily:"'Lato',sans-serif",
+      background: active ? (color||C.gold)+"22" : "rgba(0,0,0,.3)",
+      color: active ? (color||C.gold) : C.muted,
+      border:"1px solid " + (active ? (color||C.gold) : C.border),
+    }}>{label}</button>
+  );
+
+  return (
+    <div className="page">
+      <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:16 }}>
+        <span style={{ fontSize:26 }}>📜</span>
+        <h2 style={{ color:C.gold, fontFamily:"'Cinzel',serif", fontSize:19, letterSpacing:2 }}>STORICO</h2>
+        <div style={{ marginLeft:"auto", display:"flex", gap:8, alignItems:"center" }}>
+          <span style={{ color:C.muted, fontSize:12 }}>{filtered.length}/{allGames.length}</span>
+          <button onClick={()=>setShowFilters(v=>!v)} style={{
+            padding:"6px 12px", borderRadius:20, cursor:"pointer",
+            fontWeight:700, fontSize:11, fontFamily:"'Lato',sans-serif",
+            background: (showFilters||hasFilters) ? C.gold+"22" : "rgba(0,0,0,.3)",
+            color: (showFilters||hasFilters) ? C.gold : C.muted,
+            border:"1px solid " + ((showFilters||hasFilters) ? C.gold : C.border),
+          }}>🔍 Filtri{hasFilters ? " ●" : ""}</button>
+        </div>
+      </div>
+
+      {showFilters && (
+        <div style={{ ...panel, marginBottom:14, border: hasFilters ? "1px solid "+C.gold+"55" : "1px solid "+C.border }}>
+
+          {/* Raggio */}
+          <div style={{ marginBottom:12 }}>
+            <div style={{ color:C.muted, fontSize:10, letterSpacing:1.5, marginBottom:6 }}>RAGGIO</div>
+            <div style={{ display:"flex", flexWrap:"wrap", gap:6 }}>
+              {chipBtn(!filterRaggio, ()=>setFilterRaggio(""), "Tutti")}
+              {raggiList.map(r => chipBtn(filterRaggio===r, ()=>setFilterRaggio(filterRaggio===r?"":r), r))}
+            </div>
+          </div>
+
+          {/* Giocatori */}
+          <div style={{ marginBottom:12 }}>
+            <div style={{ color:C.muted, fontSize:10, letterSpacing:1.5, marginBottom:6 }}>GIOCATORI (devono essere tutti presenti)</div>
+            <div style={{ display:"flex", flexWrap:"wrap", gap:6 }}>
+              {players.map(p => chipBtn(filterPlayers.includes(p.id), ()=>toggleFilterPlayer(p.id), p.name))}
+            </div>
+          </div>
+
+          {/* Date */}
+          <div style={{ marginBottom:12 }}>
+            <div style={{ color:C.muted, fontSize:10, letterSpacing:1.5, marginBottom:6 }}>PERIODO (gg/mm/aaaa)</div>
+            <div style={{ display:"flex", gap:8, alignItems:"center" }}>
+              <input value={filterDateFrom} onChange={e=>setFilterDateFrom(e.target.value)} placeholder="Dal..." style={{ ...inp, flex:1, fontSize:12 }} />
+              <span style={{ color:C.muted }}>→</span>
+              <input value={filterDateTo} onChange={e=>setFilterDateTo(e.target.value)} placeholder="Al..." style={{ ...inp, flex:1, fontSize:12 }} />
+            </div>
+          </div>
+
+          {/* Esito */}
+          <div style={{ marginBottom:12 }}>
+            <div style={{ color:C.muted, fontSize:10, letterSpacing:1.5, marginBottom:6 }}>ESITO CHIAMANTE</div>
+            <div style={{ display:"flex", flexWrap:"wrap", gap:6 }}>
+              {chipBtn(!filterEsito, ()=>setFilterEsito(""), "Tutti")}
+              {chipBtn(filterEsito==="vince", ()=>setFilterEsito(filterEsito==="vince"?"":"vince"), "✅ Vince", C.green)}
+              {chipBtn(filterEsito==="perde", ()=>setFilterEsito(filterEsito==="perde"?"":"perde"), "❌ Perde", C.red)}
+            </div>
+          </div>
+
+          {/* Tipo chiamata */}
+          <div style={{ marginBottom:12 }}>
+            <div style={{ color:C.muted, fontSize:10, letterSpacing:1.5, marginBottom:6 }}>TIPO CHIAMATA</div>
+            <div style={{ display:"flex", flexWrap:"wrap", gap:6 }}>
+              {chipBtn(!filterTipo, ()=>setFilterTipo(""), "Tutti")}
+              {["normale","mano","carichi","import"].map(t => chipBtn(filterTipo===t, ()=>setFilterTipo(filterTipo===t?"":t), t))}
+            </div>
+          </div>
+
+          {/* Moltiplicatore */}
+          <div style={{ marginBottom:14 }}>
+            <div style={{ color:C.muted, fontSize:10, letterSpacing:1.5, marginBottom:6 }}>MOLTIPLICATORE</div>
+            <div style={{ display:"flex", flexWrap:"wrap", gap:6 }}>
+              {chipBtn(!filterMolt, ()=>setFilterMolt(""), "Tutti")}
+              {chipBtn(filterMolt==="x1", ()=>setFilterMolt(filterMolt==="x1"?"":"x1"), "×1")}
+              {chipBtn(filterMolt==="x2", ()=>setFilterMolt(filterMolt==="x2"?"":"x2"), "×2", "#d4870a")}
+              {chipBtn(filterMolt==="x3", ()=>setFilterMolt(filterMolt==="x3"?"":"x3"), "×3", C.red)}
+              {chipBtn(filterMolt==="cappotto", ()=>setFilterMolt(filterMolt==="cappotto"?"":"cappotto"), "🎩 Cappotto", C.purple)}
+            </div>
+          </div>
+
+          {/* Ordina + Reset */}
+          <div style={{ display:"flex", gap:8, alignItems:"center" }}>
+            <select value={sortBy} onChange={e=>setSortBy(e.target.value)} style={{ ...inp, flex:1, fontSize:12 }}>
+              <option value="data_desc">📅 Più recenti prima</option>
+              <option value="data_asc">📅 Più vecchie prima</option>
+            </select>
+            {hasFilters && <button onClick={resetFilters} style={{ ...btnD, whiteSpace:"nowrap" }}>✕ Reset</button>}
+          </div>
+        </div>
+      )}
+
+      {filtered.length===0 && (
+        <div style={{ textAlign:"center", padding:40, color:C.muted }}>
+          <div style={{ fontSize:36, marginBottom:8, opacity:.4 }}>🔍</div>
+          {allGames.length===0 ? "Nessuna partita ancora." : "Nessuna partita corrisponde ai filtri."}
+        </div>
+      )}
+
+      <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
+        {filtered.map(g => (
+          <div key={g.id} style={panel}>
+            <div style={{ display:"flex", justifyContent:"space-between", marginBottom:10 }}>
+              <div>
+                <div style={{ color:C.muted, fontSize:11, marginBottom:6, letterSpacing:.3 }}>
+                  {g.date}{g.raggio ? " · "+g.raggio : ""}
+                </div>
+                <div style={{ display:"flex", gap:4, flexWrap:"wrap" }}>
+                  {g.callType!=="normale" && g.callType!=="import" && <Badge color="#d4870a">{g.callType}</Badge>}
+                  {g.soglia>=71 && <Badge color={g.soglia>=81?C.red:"#d4870a"}>{g.soglia>=81?"×3":"×2"}</Badge>}
+                  {g.cappotto && <Badge color={C.purple}>Cappotto</Badge>}
+                  <Badge color={g.callerWon?C.green:C.red}>{g.callerWon?"VINCE":"PERDE"}</Badge>
+                </div>
+              </div>
+              <button onClick={() => deleteGame(g.id)} style={btnD}>✕</button>
+            </div>
+            {(g.pids||[]).map(id => {
+              const role = id===g.callerId?"📣":id===g.partnerId?"🤝":"⚔️";
+              return (
+                <div key={id} style={{ display:"flex", justifyContent:"space-between", fontSize:13, padding:"3px 0", borderBottom:"1px solid "+C.border+"44" }}>
+                  <span style={{ color:C.cream }}>{role} {getName(id)}</span>
+                  <Pts v={g.pm?(g.pm[id]||0):0} />
+                </div>
+              );
+            })}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ── PAGE: DATI ────────────────────────────────────────────────────────────────
+function PageDati({ players, setPlayers, addGames, db, loadDb, onForceSave, fbStatus }) {
+  const [unlocked, setUnlocked] = useState(false);
+  const [pwInput, setPwInput] = useState("");
+  const [pwError, setPwError] = useState(false);
+  const [msg, setMsg] = useState("");
+  const [preview, setPreview] = useState(null);
+  const [importMode, setImportMode] = useState("aggiungi");
+
+  const checkPw = () => {
+    if (pwInput === "9876") { setUnlocked(true); setPwError(false); }
+    else { setPwError(true); setPwInput(""); }
+  };
+
+  if (!unlocked) return (
+    <div className="page">
+      <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:20 }}>
+        <span style={{ fontSize:26 }}>📥</span>
+        <h2 style={{ color:C.gold, fontFamily:"'Cinzel',serif", fontSize:19, letterSpacing:2 }}>DATI</h2>
+      </div>
+      <div style={{ ...panelGold, maxWidth:300, margin:"60px auto 0", textAlign:"center", padding:28 }}>
+        <div style={{ fontSize:44, marginBottom:14 }}>🔒</div>
+        <div style={{ color:C.gold, fontFamily:"'Cinzel',serif", fontWeight:700, fontSize:15, marginBottom:6 }}>AREA PROTETTA</div>
+        <div style={{ color:C.muted, fontSize:12, marginBottom:20 }}>Inserisci la password per accedere</div>
+        <input
+          type="password"
+          value={pwInput}
+          onChange={e => { setPwInput(e.target.value); setPwError(false); }}
+          onKeyDown={e => e.key==="Enter" && checkPw()}
+          placeholder="Password..."
+          style={{ ...inp, textAlign:"center", fontSize:18, letterSpacing:4, marginBottom:10 }}
+          autoFocus
+        />
+        {pwError && <div style={{ color:C.red, fontSize:12, marginBottom:10, fontWeight:700 }}>❌ Password errata</div>}
+        <button onClick={checkPw} style={{ ...btnP, width:"100%", marginTop:4 }}>🔓 ACCEDI</button>
+      </div>
+    </div>
+  );
+
+  const FIXED = ["raggio","data","chiamante","socio","tipo","soglia","cappotto","esito"];
+
+  const isBrisco = headers => {
+    const lower = headers.map(h => h.toLowerCase());
+    return ["data","chiamante","tipo","soglia","cappotto","esito"].every(c => lower.includes(c));
+  };
+
+  const parseCSV = text => {
+    const clean = text.charCodeAt(0)===0xFEFF ? text.slice(1) : text;
+    return clean.split("\n").filter(l => l.replace("\r","").trim().length > 0).map(line => {
+      const row = []; let cur="", inQ=false;
+      for (let i=0; i<line.length; i++) {
+        const ch=line[i];
+        if (ch==='"') { inQ=!inQ; }
+        else if (ch==="," && !inQ) { row.push(cur.trim()); cur=""; }
+        else if (ch!=="\r") cur+=ch;
+      }
+      row.push(cur.trim());
+      return row;
+    });
+  };
+
+  const handleFile = e => {
+    const file = e.target.files[0];
+    if (!file) return;
+    if (!file.name.toLowerCase().endsWith(".csv")) { setMsg("⚠️ Solo file .csv."); return; }
+    const reader = new FileReader();
+    reader.onload = ev => {
+      const rows = parseCSV(ev.target.result);
+      if (rows.length < 2) { setMsg("File vuoto."); return; }
+      setPreview({ headers:rows[0], rows:rows.slice(1).filter(r=>r.some(c=>c!=="")), isBriscolone:isBrisco(rows[0]) });
+      setMsg("");
+    };
+    reader.readAsText(file, "UTF-8");
+  };
+
+  const buildGames = (headers, rows, basePlayers) => {
+    const lower = headers.map(h => h.toLowerCase());
+    const ci = n => lower.indexOf(n);
+    const isB = isBrisco(headers);
+    const usedCols = headers.map((h,i)=>({name:h,i})).filter(c => !FIXED.includes(c.name.toLowerCase()) && c.name.trim());
+
+    let np = [...basePlayers];
+    usedCols.forEach(({name}) => {
+      if (!np.find(p => p.name.toLowerCase()===name.toLowerCase())) np.push({id:uid(),name});
+    });
+
+    const games = [];
+    rows.forEach(row => {
+      const pids=[], pm={};
+      let partnerId=null, raggio="";
+      usedCols.forEach(({name,i}) => {
+        const v=row[i]; if (v===""||v===undefined) return;
+        const pt=Number(v); if (isNaN(pt)) return;
+        const p=np.find(x=>x.name.toLowerCase()===name.toLowerCase()); if (!p) return;
+        pids.push(p.id); pm[p.id]=pt;
+      });
+      if (pids.length < 2) return;
+      let date, callType, soglia, cappotto, callerWon, callerId;
+      if (isB) {
+        raggio    = row[ci("raggio")] || "";
+        date      = row[ci("data")] || todayStr();
+        callType  = row[ci("tipo")] || "import";
+        soglia    = Number(row[ci("soglia")]) || 61;
+        cappotto  = (row[ci("cappotto")]||"").toLowerCase()==="sì";
+        callerWon = (row[ci("esito")]||"").toLowerCase()==="vince";
+        const cp  = np.find(p=>p.name.toLowerCase()===(row[ci("chiamante")]||"").toLowerCase());
+        callerId  = cp ? cp.id : pids.slice().sort((a,b)=>(pm[b]||0)-(pm[a]||0))[0];
+        const sp  = np.find(p=>p.name.toLowerCase()===(row[ci("socio")]||"").toLowerCase());
+        if (sp) partnerId = sp.id;
+      } else {
+        const dIdx = lower.indexOf("data")>=0 ? lower.indexOf("data") : lower.indexOf("date");
+        date = dIdx>=0 ? (row[dIdx]||todayStr()) : todayStr();
+        callType="import"; soglia=61; cappotto=false;
+        callerId = pids.slice().sort((a,b)=>(pm[b]||0)-(pm[a]||0))[0];
+        callerWon = (pm[callerId]||0) > 0;
+      }
+      games.push({id:uid(), date, pids, callerId, partnerId, callType, soglia, cappotto, callerWon, pm, raggio});
+    });
+    return {games, players:np};
+  };
+
+  const doImport = () => {
+    if (!preview) return;
+    const base = importMode==="sostituisci" ? [] : players;
+    const {games:ng, players:np} = buildGames(preview.headers, preview.rows, base);
+    if (importMode==="sostituisci") {
+      loadDb({...db, players:np, allGames:ng, giornoGames:ng, raggioDays:[], raggi:[]});
+      setMsg("✅ Database sostituito con "+ng.length+" partite.");
+    } else {
+      addGames(ng, np);
+      setMsg("✅ Aggiunte "+ng.length+" partite.");
+    }
+    setPreview(null);
+  };
+
+  const exportJson = () => {
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(new Blob([JSON.stringify(db,null,2)],{type:"application/json"}));
+    a.download = "briscolone_"+todayStr().split("/").join("-")+".json";
+    a.click();
+  };
+
+  const importJson = e => {
+    const file = e.target.files[0]; if (!file) return;
+    const reader = new FileReader();
+    reader.onload = ev => {
+      try {
+        const data = JSON.parse(ev.target.result);
+        if (!data.players||!data.allGames) { setMsg("❌ File JSON non valido."); return; }
+        loadDb(data); setMsg("✅ Database caricato!");
+      } catch { setMsg("❌ Errore nel file JSON."); }
+    };
+    reader.readAsText(file);
+  };
+
+  const exportCsv = () => {
+    const games = db.allGames;
+    if (!games||!games.length) { setMsg("⚠️ Nessuna partita."); return; }
+    const sp = [...players].sort((a,b)=>a.name.localeCompare(b.name));
+    const headers = ["Raggio","Data","Chiamante","Socio","Tipo","Soglia","Cappotto","Esito",...sp.map(p=>p.name)];
+    const getName = id => { const p=players.find(x=>x.id===id); return p?p.name:""; };
+    const rows = [...games].sort((a,b)=>(a.date||"").localeCompare(b.date||"")).map(g => [
+      g.raggio||"", g.date||"", getName(g.callerId), g.partnerId?getName(g.partnerId):"",
+      g.callType||"", g.soglia||61, g.cappotto?"sì":"no", g.callerWon?"vince":"perde",
+      ...sp.map(p => g.pm?(g.pm[p.id]!==undefined?g.pm[p.id]:""):""),
+    ]);
+    const esc = v => { const s=String(v); return (s.includes(",")||s.includes('"')) ? '"'+s.split('"').join('""')+'"' : s; };
+    const csv = [headers,...rows].map(r=>r.map(esc).join(",")).join("\n");
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(new Blob(["\uFEFF"+csv],{type:"text/csv;charset=utf-8"}));
+    a.download = "briscolone_"+todayStr().split("/").join("-")+".csv";
+    a.click();
+  };
+
+  return (
+    <div className="page">
+      <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:20 }}>
+        <span style={{ fontSize:26 }}>📥</span>
+        <h2 style={{ color:C.gold, fontFamily:"'Cinzel',serif", fontSize:19, letterSpacing:2 }}>DATI</h2>
+      </div>
+
+      <div style={{ ...panel, marginBottom:12 }}>
+        <div style={{ color:C.gold, fontWeight:700, fontSize:10, letterSpacing:2, marginBottom:6 }}>💾 BACKUP JSON</div>
+        <div style={{ color:C.muted, fontSize:12, lineHeight:1.6, marginBottom:14 }}>Salva o ripristina tutto il database.</div>
+        <div style={{ display:"flex", gap:8 }}>
+          <button onClick={exportJson} style={{ ...btnP, flex:1 }}>⬇️ Scarica</button>
+          <label style={{ ...btnP, flex:1, textAlign:"center", cursor:"pointer" }}>
+            ⬆️ Carica <input type="file" accept=".json" onChange={importJson} style={{ display:"none" }} />
+          </label>
+        </div>
+      </div>
+
+      <div style={{ ...panel, marginBottom:12, border:"1px solid " + C.green + "55" }}>
+        <div style={{ color:C.green, fontWeight:700, fontSize:10, letterSpacing:2, marginBottom:6 }}>☁️ SINCRONIZZAZIONE FIREBASE</div>
+        <div style={{ color:C.muted, fontSize:12, lineHeight:1.6, marginBottom:14 }}>Forza il salvataggio di tutti i dati su Firebase. Usalo se qualcosa non si è sincronizzato correttamente.</div>
+        <button onClick={onForceSave} style={{ ...btnP, width:"100%", background:"linear-gradient(135deg,#1a5c2a,#27ae60)", border:"1px solid " + C.green }}>
+          ☁️ FORZA AGGIORNAMENTO DB
+        </button>
+      </div>
+
+      <div style={{ ...panel, marginBottom:20 }}>
+        <div style={{ color:C.gold, fontWeight:700, fontSize:10, letterSpacing:2, marginBottom:6 }}>📊 ESPORTA CSV</div>
+        <div style={{ color:C.muted, fontSize:12, lineHeight:1.6, marginBottom:14 }}>Una riga per partita, una colonna per giocatore.</div>
+        <button onClick={exportCsv} style={{ ...btnP, width:"100%" }}>⬇️ Scarica CSV</button>
+      </div>
+
+      <Divider />
+
+      <div style={{ ...panel, marginBottom:14 }}>
+        <div style={{ color:C.gold, fontWeight:700, fontSize:10, letterSpacing:2, marginBottom:6 }}>📂 IMPORTA CSV</div>
+        <div style={{ color:C.muted, fontSize:12, lineHeight:1.6, marginBottom:14 }}>Accetta il CSV di questa app o CSV generici.</div>
+        <div style={{ display:"flex", gap:8, marginBottom:14 }}>
+          {[["aggiungi","➕ Aggiungi","aggiunge al db"],["sostituisci","🔄 Sostituisci","cancella tutto"]].map(([v,l,sub]) => (
+            <button key={v} onClick={() => setImportMode(v)} style={{
+              flex:1, padding:"10px 8px", borderRadius:8, cursor:"pointer", fontFamily:"'Lato',sans-serif",
+              background:importMode===v ? (v==="sostituisci"?C.red+"1a":C.green+"1a") : "rgba(0,0,0,.3)",
+              color:importMode===v ? (v==="sostituisci"?C.red:C.green) : C.muted,
+              border:"1px solid " + (importMode===v ? (v==="sostituisci"?C.red:C.green) : C.border),
+            }}>
+              <div style={{ fontWeight:800, fontSize:12 }}>{l}</div>
+              <div style={{ fontSize:10, marginTop:2, opacity:.7 }}>{sub}</div>
+            </button>
+          ))}
+        </div>
+        <label style={{ display:"block", padding:20, border:"2px dashed "+C.border, borderRadius:10, textAlign:"center", cursor:"pointer", color:C.muted, fontSize:13 }}>
+          📎 Seleziona file .csv
+          <input type="file" accept=".csv" onChange={handleFile} style={{ display:"none" }} />
+        </label>
+      </div>
+
+      {preview && (
+        <div style={{ ...panelGold, marginBottom:14 }}>
+          <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10 }}>
+            <span style={{ color:C.gold, fontWeight:700 }}>Anteprima — {preview.rows.length} righe</span>
+            <Badge color={preview.isBriscolone?C.green:C.muted}>{preview.isBriscolone?"Briscolone":"Generico"}</Badge>
+          </div>
+          <div style={{ overflowX:"auto", marginBottom:14 }}>
+            <table style={{ borderCollapse:"collapse", fontSize:11, width:"100%" }}>
+              <thead><tr>{preview.headers.map((h,i) => <th key={i} style={{ color:C.gold, padding:"4px 8px", textAlign:"left", borderBottom:"1px solid "+C.border, whiteSpace:"nowrap" }}>{h}</th>)}</tr></thead>
+              <tbody>{preview.rows.slice(0,3).map((r,i) => <tr key={i}>{preview.headers.map((_,j) => <td key={j} style={{ color:C.cream, padding:"4px 8px" }}>{r[j]||""}</td>)}</tr>)}</tbody>
+            </table>
+          </div>
+          {importMode==="sostituisci" && (
+            <div style={{ background:C.red+"1a", border:"1px solid "+C.red+"44", borderRadius:7, padding:"8px 12px", marginBottom:12, color:C.red, fontSize:12, fontWeight:700 }}>
+              ⚠️ Questo cancellerà tutto il database!
+            </div>
+          )}
+          <div style={{ display:"flex", gap:8 }}>
+            <button onClick={() => setPreview(null)} style={{ ...btnG(C.muted), flex:1 }}>Annulla</button>
+            <button onClick={doImport} style={{ ...btnP, flex:2 }}>{importMode==="sostituisci"?"🔄":"➕"} {preview.rows.length} partite</button>
+          </div>
+        </div>
+      )}
+
+      {msg && (
+        <div style={{ background:msg.startsWith("✅")?C.green+"1a":C.red+"1a", border:"1px solid "+(msg.startsWith("✅")?C.green:C.red)+"55", borderRadius:8, padding:14, color:msg.startsWith("✅")?C.green:C.red, fontWeight:700, fontSize:13 }}>{msg}</div>
+      )}
+    </div>
+  );
+}
+
+// ── APP ───────────────────────────────────────────────────────────────────────
+function App() {
+  const [players, setPlayers] = useState([]);
+  const [allGames, setAllGames] = useState([]);
+  const [giornoGames, setGiornoGames] = useState([]);
+  const [raggi, setRaggi] = useState([]);
+  const [raggioCorrenteNome, setRaggioCorrenteNome] = useState("Raggio100");
+  const [tableIds, setTableIds] = useState([]);
+  const [callerId, setCallerId] = useState("");
+  const [partnerId, setPartnerId] = useState("");
+  const [callType, setCallType] = useState("normale");
+  const [soglia, setSoglia] = useState(61);
+  const [cappotto, setCappotto] = useState(false);
+  const [callerWon, setCallerWon] = useState(null);
+  const [gameDate, setGameDate] = useState(todayStr());
+  const [page, setPage] = useState("classifiche");
+  const [confirmDlg, setConfirmDlg] = useState(null);
+  const [infoDlg, setInfoDlg] = useState(null);
+
+  const loadDb = data => {
+    setPlayers(data.players || []);
+    setAllGames(data.allGames || []);
+    // Filtra giornoGames: tieni solo le partite di oggi
+    const oggi = todayStr();
+    const tutteGiorno = data.giornoGames || [];
+    const giornoDiOggi = tutteGiorno.filter(g => g.date === oggi);
+    setGiornoGames(giornoDiOggi);
+    const r = data.raggi || [];
+    setRaggi(r);
+    setRaggioCorrenteNome(data.raggioCorrenteNome || nextRaggioName(r));
+  };
+
+  const { status: fbStatus, save: fbSave } = useFirebase(loadDb);
+
+
+  const addGame = g => {
+    const tg = { ...g, raggio: raggioCorrenteNome };
+    const newAll = [tg, ...allGames];
+    // giornoGames: solo partite di oggi
+    const oggi = todayStr();
+    const newGiorno = [tg, ...giornoGames].filter(x => x.date === oggi);
+    setAllGames(newAll);
+    setGiornoGames(newGiorno);
+    fbSave({ players, allGames: newAll, giornoGames: newGiorno, raggioDays: [], raggi, raggioCorrenteNome });
+  };
+
+  const addGames = (gs, newPlayers) => {
+    if (newPlayers) setPlayers(newPlayers);
+    setAllGames(p => [...gs, ...p]);
+    setGiornoGames(p => [...gs, ...p]);
+  };
+  const deleteGame = id => { setAllGames(p => p.filter(g=>g.id!==id)); setGiornoGames(p => p.filter(g=>g.id!==id)); };
+
+  const doChiudiRaggio = () => {
+    const rg = allGames.filter(g => g.raggio===raggioCorrenteNome);
+    if (rg.length===0) { setInfoDlg({title:"Raggio vuoto", lines:["Non ci sono partite nel raggio corrente."]}); return; }
+    const scores = players
+      .filter(p => rg.some(g=>g.pids&&g.pids.includes(p.id)))
+      .map(p => ({pid:p.id, name:p.name, pts:sumPts(p.id,rg)}));
+    const sorted = scores.slice().sort((a,b)=>b.pts-a.pts);
+    const winner = sorted[0];
+    const dates = rg.map(g=>g.date||"").filter(Boolean).sort();
+    const newRaggio = {
+      id:uid(), nome:raggioCorrenteNome,
+      startDate:dates[0]||todayStr(), endDate:dates[dates.length-1]||todayStr(),
+      days:new Set(dates).size, scores, winner:winner?winner.name:null, winnerPts:winner?winner.pts:0,
+    };
+    const newRaggi = [...raggi, newRaggio];
+    const newNome = nextRaggioName(newRaggi);
+    setRaggi(newRaggi);
+    setRaggioCorrenteNome(newNome);
+    setGiornoGames([]);
+    fbSave({players, allGames, giornoGames:[], raggioDays:[], raggi:newRaggi, raggioCorrenteNome:newNome});
+    setInfoDlg({title:"🏁 "+raggioCorrenteNome+" chiuso!", lines:[
+      "Vincitore: "+(winner?winner.name:"—")+" ("+(winner?winner.pts:0)+" pt)",
+      "─────────────────",
+      ...sorted.map(s=>s.name+": "+(s.pts>0?"+":"")+s.pts+" pt"),
+      "─────────────────", "Prossimo: "+newNome,
+    ]});
+  };
+
+  const chiudiRaggio = () => setConfirmDlg({
+    title:"Chiudi "+raggioCorrenteNome,
+    msg:"Il raggio verrà chiuso, il vincitore registrato e si ripartirà con "+nextRaggioName([...raggi,{nome:raggioCorrenteNome}])+".",
+    onOk: doChiudiRaggio,
+  });
+
+  const dbData = {players, allGames, giornoGames, raggioDays:[], raggi, raggioCorrenteNome};
+
+  const NAV = [
+    {id:"classifiche", icon:"🏆", label:"Classifiche"},
+    {id:"dashboard",   icon:"📊",  label:"Stats"},
+    {id:"partita",     icon:"🃏",  label:"Partita"},
+    {id:"giocatori",   icon:"♟️",  label:"Giocatori"},
+    {id:"storico",     icon:"📜",  label:"Storico"},
+    {id:"dati",        icon:"📥",  label:"Dati"},
+  ];
+
+  return (
+    <div style={{ minHeight:"100vh", display:"flex", flexDirection:"column" }}>
+      <div style={{
+        background:"linear-gradient(180deg,rgba(0,0,0,.65),rgba(0,0,0,.35))",
+        borderBottom:"1px solid "+C.gold+"44",
+        padding:"14px 20px", display:"flex", alignItems:"center", gap:12,
+        boxShadow:"0 2px 20px rgba(0,0,0,.5)",
+        position:"sticky", top:0, zIndex:100,
+        backdropFilter:"blur(8px)",
+      }}>
+        <div style={{ display:"flex", gap:4 }}>
+          <span style={{ color:"#c0392b", fontSize:22 }}>♥</span>
+          <span style={{ color:C.cream, fontSize:22 }}>♠</span>
+        </div>
+        <div>
+          <h1 style={{ fontFamily:"'Cinzel',serif", fontSize:19, color:C.gold, letterSpacing:3 }}>BRISCOLONE</h1>
+          <div style={{ color:C.muted, fontSize:8, letterSpacing:4 }}>CASINO BREDA</div>
+        </div>
+        <div style={{ marginLeft:"auto", display:"flex", alignItems:"center", gap:10 }}>
+          <FbBadge status={fbStatus} />
+          <div style={{ display:"flex", gap:5 }}>
+            <span style={{ color:C.goldD, fontSize:18 }}>♦</span>
+            <span style={{ color:C.goldD, fontSize:18 }}>♣</span>
+          </div>
+        </div>
+      </div>
+
+      <div style={{ flex:1, padding:"16px 16px 90px", maxWidth:520, width:"100%", margin:"0 auto" }}>
+        {page==="classifiche" && <PageClassifiche players={players} allGames={allGames} giornoGames={giornoGames} raggi={raggi} raggioCorrenteNome={raggioCorrenteNome} onChiudiRaggio={chiudiRaggio} />}
+        {page==="dashboard"   && <PageDashboard players={players} allGames={allGames} raggi={raggi} />}
+        {page==="giocatori"   && <PageGiocatori players={players} setPlayers={setPlayers} addPlayer={(p) => { const np = [...players, p]; setPlayers(np); fbSave({ players: np, allGames, giornoGames, raggioDays: [], raggi, raggioCorrenteNome }); }} onSavePlayers={() => fbSave({ players, allGames, giornoGames, raggioDays: [], raggi, raggioCorrenteNome })} allGames={allGames} raggi={raggi} />}
+        {page==="partita"     && <PagePartita players={players} addGame={addGame} tableIds={tableIds} setTableIds={setTableIds} giornoGames={giornoGames} allGames={allGames} raggioCorrenteNome={raggioCorrenteNome} onChiudiRaggio={chiudiRaggio} callerId={callerId} setCallerId={setCallerId} partnerId={partnerId} setPartnerId={setPartnerId} callType={callType} setCallType={setCallType} soglia={soglia} setSoglia={setSoglia} cappotto={cappotto} setCappotto={setCappotto} callerWon={callerWon} setCallerWon={setCallerWon} date={gameDate} setDate={setGameDate} />}
+        {page==="storico"     && <PageStorico allGames={allGames} players={players} deleteGame={deleteGame} />}
+        {page==="dati"        && <PageDati players={players} setPlayers={setPlayers} addGames={addGames} db={dbData} loadDb={loadDb} onForceSave={() => fbSave({ players, allGames, giornoGames, raggioDays: [], raggi, raggioCorrenteNome })} fbStatus={fbStatus} />}
+      </div>
+
+      {confirmDlg && <Confirm title={confirmDlg.title} msg={confirmDlg.msg} onOk={()=>{const fn=confirmDlg.onOk;setConfirmDlg(null);fn();}} onCancel={()=>setConfirmDlg(null)} />}
+      {infoDlg && <Info title={infoDlg.title} lines={infoDlg.lines} onOk={()=>setInfoDlg(null)} />}
+
+      <div style={{
+        position:"fixed", bottom:0, left:0, right:0,
+        background:"linear-gradient(0deg,rgba(6,20,11,.97),rgba(10,30,18,.94))",
+        borderTop:"1px solid "+C.gold+"2a",
+        display:"flex", justifyContent:"space-around",
+        padding:"8px 0 16px",
+        boxShadow:"0 -4px 20px rgba(0,0,0,.6)",
+      }}>
+        {NAV.map(n => (
+          <button key={n.id} onClick={()=>setPage(n.id)} style={{ background:"none", border:"none", cursor:"pointer", display:"flex", flexDirection:"column", alignItems:"center", gap:3, padding:"0 6px" }}>
+            <span style={{ fontSize:20, opacity:page===n.id?1:.25, filter:page===n.id?"drop-shadow(0 0 5px "+C.gold+")":"none", transition:"all .2s" }}>{n.icon}</span>
+            <span style={{ fontSize:8, fontWeight:700, letterSpacing:1.5, color:page===n.id?C.gold:C.muted, transition:"color .2s" }}>{n.label.toUpperCase()}</span>
+            {page===n.id && <div style={{ width:16, height:2, background:C.gold, borderRadius:1 }} />}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// v3-casino
+try {
+  const root = ReactDOM.createRoot(document.getElementById("root"));
+  root.render(<App />);
+} catch(e) {
+  document.getElementById("root").innerHTML = '<div style="color:red;padding:20px;font-family:monospace;background:#000;min-height:100vh"><h2>ERRORE:</h2><pre>' + e.message + '</pre><pre>' + (e.stack||'') + '</pre></div>';
+}
+</script>
+</body>
+</html>
