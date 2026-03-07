@@ -356,10 +356,10 @@ function RankList({ rows }) {
       {rows.map((r, i) => (
         <div key={r.id || i} style={{
           display:"flex", alignItems:"center", gap:12, padding:"12px 14px",
-          background: i===0 ? "linear-gradient(135deg,rgba(60,100,55,.9),rgba(35,75,45,.9))" : "linear-gradient(135deg,rgba(25,60,38,.9),rgba(18,48,28,.9))",
+          background: i===0 ? C.panelBg : "rgba(0,0,0,.25)",
           border:"1px solid " + (i===0 ? C.gold : C.border),
           borderRadius:10,
-          boxShadow: i===0 ? "0 0 18px rgba(201,168,76,.18)" : "0 2px 8px rgba(0,0,0,.3)",
+          boxShadow: i===0 ? "0 0 18px "+C.gold+"30" : "0 2px 8px rgba(0,0,0,.3)",
         }}>
           <span style={{ fontSize:16, width:24, textAlign:"center", flexShrink:0, opacity:.8 }}>{medals[i] || ("#"+(i+1))}</span>
           <Avatar p={r} size={38} />
@@ -1299,14 +1299,12 @@ function PagePartita({ players, addGame, tableIds, setTableIds, giornoGames, all
               <div>
                 <div style={{ color:C.muted, fontSize:11, letterSpacing:1, marginBottom:8 }}>MOLTIPLICATORE</div>
                 <div style={{ display:"flex", gap:8 }}>
-                  {[[1,"✕1",C.muted,"#ffffff22"],[2,"✕2","#d4870a","#d4870a22"],[3,"✕3",C.red,C.red+"22"]].map(([v,l,col,bg]) => (
+                  {[[1,"✕1"],[2,"✕2"],[3,"✕3"]].map(([v,l]) => (
                     <button key={v} onClick={()=>setSoglia(v===1?61:v===2?71:81)} style={{
-                      flex:1, padding:"13px 0", borderRadius:8, cursor:"pointer",
-                      fontWeight:900, fontSize:18, fontFamily:"'Lato',sans-serif",
-                      background: sogliaMult===v ? bg : "rgba(0,0,0,.3)",
-                      color: sogliaMult===v ? col : C.muted,
-                      border:"2px solid " + (sogliaMult===v ? col : C.border),
-                      boxShadow: sogliaMult===v ? "0 0 12px "+col+"44" : "none",
+                      flex:1, padding:"10px 0", borderRadius:7, cursor:"pointer", fontWeight:700, fontSize:11, fontFamily:"'Lato',sans-serif", letterSpacing:.5,
+                      background:sogliaMult===v ? "linear-gradient(135deg,"+C.goldD+","+C.gold+")" : "rgba(0,0,0,.3)",
+                      color:sogliaMult===v ? "#1a0e00" : C.muted,
+                      border:"1px solid " + (sogliaMult===v ? C.gold : C.border),
                     }}>{l}</button>
                   ))}
                 </div>
@@ -2044,10 +2042,10 @@ function App() {
 
       <div style={{ flex:1, padding:"16px 16px 90px", maxWidth:520, width:"100%", margin:"0 auto" }}>
         {page==="classifiche" && <PageClassifiche players={players} allGames={allGames} giornoGames={giornoGames} raggi={raggi} raggioCorrenteNome={raggioCorrenteNome} onChiudiRaggio={chiudiRaggio} />}
-        {page==="dashboard"   && <PageDashboard players={players} allGames={allGames} raggi={raggi} />}
-        {page==="giocatori"   && <PageGiocatori players={players} setPlayers={setPlayers} addPlayer={(p) => { const np = [...players, p]; setPlayers(np); fbSave({ players: np, allGames, giornoGames, raggioDays: [], raggi, raggioCorrenteNome }); }} onSavePlayers={() => fbSave({ players, allGames, giornoGames, raggioDays: [], raggi, raggioCorrenteNome })} allGames={allGames} raggi={raggi} />}
+        {page==="dashboard"   && <PageDashboard players={players} allGames={allGames} raggi={raggi} themeId={themeId} />}
+        {page==="giocatori"   && <PageGiocatori players={players} setPlayers={setPlayers} addPlayer={(p) => { const np = [...players, p]; setPlayers(np); fbSave({ players: np, allGames, giornoGames, raggioDays: [], raggi, raggioCorrenteNome }); }} onSavePlayers={() => fbSave({ players, allGames, giornoGames, raggioDays: [], raggi, raggioCorrenteNome })} allGames={allGames} raggi={raggi} themeId={themeId} />}
         {page==="partita"     && <PagePartita players={players} addGame={addGame} tableIds={tableIds} setTableIds={setTableIds} giornoGames={giornoGames} allGames={allGames} raggioCorrenteNome={raggioCorrenteNome} onChiudiRaggio={chiudiRaggio} callerId={callerId} setCallerId={setCallerId} partnerId={partnerId} setPartnerId={setPartnerId} callType={callType} setCallType={setCallType} soglia={soglia} setSoglia={setSoglia} cappotto={cappotto} setCappotto={setCappotto} callerWon={callerWon} setCallerWon={setCallerWon} date={gameDate} setDate={setGameDate} />}
-        {page==="storico"     && <PageStorico allGames={allGames} players={players} deleteGame={deleteGame} />}
+        {page==="storico"     && <PageStorico allGames={allGames} players={players} deleteGame={deleteGame} themeId={themeId} />}
         {page==="dati"        && <PageDati players={players} setPlayers={setPlayers} addGames={addGames} db={dbData} loadDb={loadDb} onForceSave={() => fbSave({ players, allGames, giornoGames, raggioDays: [], raggi, raggioCorrenteNome })} fbStatus={fbStatus} />}
       </div>
 
