@@ -1597,7 +1597,11 @@ function App() {
   const loadDb = data => {
     setPlayers(data.players || []);
     setAllGames(data.allGames || []);
-    setGiornoGames(data.giornoGames || []);
+    // Filtra giornoGames: tieni solo le partite di oggi
+    const oggi = todayStr();
+    const tutteGiorno = data.giornoGames || [];
+    const giornoDiOggi = tutteGiorno.filter(g => g.date === oggi);
+    setGiornoGames(giornoDiOggi);
     const r = data.raggi || [];
     setRaggi(r);
     setRaggioCorrenteNome(data.raggioCorrenteNome || nextRaggioName(r));
@@ -1609,7 +1613,9 @@ function App() {
   const addGame = g => {
     const tg = { ...g, raggio: raggioCorrenteNome };
     const newAll = [tg, ...allGames];
-    const newGiorno = [tg, ...giornoGames];
+    // giornoGames: solo partite di oggi
+    const oggi = todayStr();
+    const newGiorno = [tg, ...giornoGames].filter(x => x.date === oggi);
     setAllGames(newAll);
     setGiornoGames(newGiorno);
     fbSave({ players, allGames: newAll, giornoGames: newGiorno, raggioDays: [], raggi, raggioCorrenteNome });
