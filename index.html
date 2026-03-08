@@ -957,7 +957,6 @@ function PageDashboard({ players, allGames, raggi, giornoGames, raggioCorrenteNo
 
   if (!allGames.length) return (
     <div className="page">
-      {pcVisible && <DashboardPC players={players} allGames={allGames} giornoGames={giornoGames||[]} raggi={raggi} raggioCorrenteNome={raggioCorrenteNome} onClose={handleClosePc} />}
       <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:20 }}>
         <div style={{ display:"flex", alignItems:"center", gap:10 }}>
           <span style={{ fontSize:26 }}>📊</span>
@@ -1133,6 +1132,7 @@ function PageDashboard({ players, allGames, raggi, giornoGames, raggioCorrenteNo
 
   return (
     <div className="page">
+      {pcVisible && <DashboardPC players={players} allGames={allGames} giornoGames={giornoGames||[]} raggi={raggi} raggioCorrenteNome={raggioCorrenteNome} onClose={handleClosePc} />}
       <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:16 }}>
         <div style={{ display:"flex", alignItems:"center", gap:10 }}>
           <span style={{ fontSize:26 }}>📊</span>
