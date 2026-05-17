@@ -4,6 +4,14 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
 <title>Gym Tracker — Mattia</title>
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
+<meta name="apple-mobile-web-app-title" content="Gym">
+<meta name="theme-color" content="#0a0a0a">
+<link rel="manifest" href="gym-manifest.json">
+<link rel="icon" href="gym-icon-192.png">
+<link rel="apple-touch-icon" href="gym-icon-192.png">
 <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Syne:wght@700;800&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
 <style>
   :root {
@@ -1183,6 +1191,11 @@ function setStatus(screen, state, text) {
 // Init
 updateDateDisplay();
 tryAutoSignIn();
+
+// Register service worker for PWA
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('gym-sw.js').catch(function() {});
+}
 </script>
 </body>
 </html>
