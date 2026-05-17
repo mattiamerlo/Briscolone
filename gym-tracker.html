@@ -708,10 +708,42 @@ async function signIn() {
     callback: (resp) => {
       if (resp.error) { showToast('Errore login: ' + resp.error, 'error'); return; }
       accessToken = resp.access_token;
+      const expiry = Date.now() + (resp.expires_in - 60) * 1000;
+      sessionStorage.setItem('gym_token', resp.access_token);
+      sessionStorage.setItem('gym_token_expiry', expiry);
       onSignedIn();
     }
   });
   tokenClient.requestAccessToken({ prompt: 'consent' });
+}
+
+async function tryAutoSignIn() {
+  const token = sessionStorage.getItem('gym_token');
+  const expiry = parseInt(sessionStorage.getItem('gym_token_expiry') || '0');
+  if (token && Date.now() < expiry) {
+    accessToken = token;
+    onSignedIn();
+    return;
+  }
+  // Try silent refresh
+  await loadGAPI();
+  tokenClient = google.accounts.oauth2.initTokenClient({
+    client_id: CLIENT_ID,
+    scope: SCOPES,
+    prompt: '',
+    callback: (resp) => {
+      if (resp.error || !resp.access_token) {
+        // Silent failed, show login button
+        return;
+      }
+      accessToken = resp.access_token;
+      const expiry = Date.now() + (resp.expires_in - 60) * 1000;
+      sessionStorage.setItem('gym_token', resp.access_token);
+      sessionStorage.setItem('gym_token_expiry', expiry);
+      onSignedIn();
+    }
+  });
+  tokenClient.requestAccessToken({ prompt: '' });
 }
 
 function onSignedIn() {
@@ -1150,6 +1182,7 @@ function setStatus(screen, state, text) {
 
 // Init
 updateDateDisplay();
+tryAutoSignIn();
 </script>
 </body>
 </html>
