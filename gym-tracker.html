@@ -277,7 +277,7 @@
       <div class="sec-header">
         <div class="sec-title">Check-in</div>
         <div class="sec-sub">Biofeedback giornaliero</div>
-        <div class="date-chip" id="today-date"></div>
+        <div style="display:flex;align-items:center;gap:0.5rem;margin-top:0.5rem;"><button onclick="changeDay(-1)" style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:0.3rem 0.7rem;cursor:pointer;font-size:1.1rem;">        <div class="date-chip" id="today-date"></div>#8249;</button><div class="date-chip" id="today-date" style="flex:1;text-align:center;cursor:pointer;" onclick="jumpToToday()"></div><button onclick="changeDay(1)" style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:0.3rem 0.7rem;cursor:pointer;font-size:1.1rem;">        <div class="date-chip" id="today-date"></div>#8250;</button></div>
       </div>
 
       <div id="checkin-status" class="status-bar">
@@ -717,8 +717,8 @@ async function signIn() {
 function onSignedIn() {
   document.getElementById('login-screen').style.display = 'none';
   document.getElementById('app').classList.add('visible');
-  document.getElementById('today-date').textContent = formatDate(new Date());
-  loadStats();
+  updateDateDisplay();
+  loadCheckinData();
 }
 
 function getToken() {
@@ -764,34 +764,106 @@ async function sheetsBatchUpdate(data) {
 // ============================================================
 // DATE UTILS
 // ============================================================
+let currentDate = new Date();
+
 function formatDate(d) {
   return d.toLocaleDateString('it-IT', { weekday: 'long', day: 'numeric', month: 'long' });
 }
 
-function excelDate(d) {
-  // Excel serial date
-  const start = new Date(1899, 11, 30);
-  return Math.floor((d - start) / 86400000);
+function dateToStr(d) {
+  const dd = String(d.getDate()).padStart(2, '0');
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const yyyy = d.getFullYear();
+  return dd + '/' + mm + '/' + yyyy;
 }
 
-function todaySerial() {
-  return excelDate(new Date());
+function isToday(d) {
+  const now = new Date();
+  return d.getDate() === now.getDate() && d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
 }
 
-async function findTodayRow() {
-  const today = new Date();
-  const dd = String(today.getDate()).padStart(2, '0');
-  const mm = String(today.getMonth() + 1).padStart(2, '0');
-  const yyyy = today.getFullYear();
-  const todayStr = dd + '/' + mm + '/' + yyyy;
+function changeDay(delta) {
+  currentDate = new Date(currentDate);
+  currentDate.setDate(currentDate.getDate() + delta);
+  updateDateDisplay();
+  loadCheckinData();
+}
 
+function jumpToToday() {
+  currentDate = new Date();
+  updateDateDisplay();
+  loadCheckinData();
+}
+
+function updateDateDisplay() {
+  const chip = document.getElementById('today-date');
+  const label = isToday(currentDate) ? 'Oggi — ' + formatDate(currentDate) : formatDate(currentDate);
+  chip.textContent = label;
+  chip.style.color = isToday(currentDate) ? 'var(--accent)' : 'var(--accent2)';
+}
+
+async function findRowForDate(d) {
+  const dateStr = dateToStr(d);
   const data = await sheetsGet(SHEET_PROTOCOL + '!A5:A200');
   if (!data || !data.values) return null;
   for (let i = 0; i < data.values.length; i++) {
     const v = (data.values[i][0] || '').toString().trim();
-    if (v === todayStr) return i + 5; // 1-indexed, dates start at row 5
+    if (v === dateStr) return i + 5;
   }
   return null;
+}
+
+async function loadCheckinData() {
+  setStatus('checkin', 'loading', 'Caricamento dati...');
+  try {
+    const row = await findRowForDate(currentDate);
+    if (!row) { resetCheckinForm(); setStatus('checkin', 'error', 'Data non nel foglio'); return; }
+    const data = await sheetsGet(SHEET_PROTOCOL + '!B' + row + ':N' + row);
+    if (!data || !data.values || !data.values[0]) {
+      resetCheckinForm(); setStatus('checkin', 'ok', 'Nessun dato per questa data'); return;
+    }
+    const r = data.values[0];
+    // B=0, C=1(formula,skip), D=2, E=3, F=4, G=5, H=6, I=7, J=8, K=9, L=10, M=11, N=12
+    document.getElementById('val-note').value = r[0] || '';
+    setToggle('nutri', r[2] === 'TRUE');
+    setToggle('wo', r[3] === 'TRUE');
+    if (r[4]) { document.getElementById('val-peso').value = r[4]; }
+    setSliderVal('sonno', r[5] || 7);
+    setSliderVal('energia', r[6] || 5);
+    setSliderVal('libido', r[7] || 5);
+    setSliderVal('focus', r[8] || 5);
+    setSliderVal('stress', r[9] || 5);
+    setSliderVal('ansia', r[10] || 5);
+    if (r[11]) { document.getElementById('val-passi').value = r[11]; }
+    setToggle('dr', r[12] === 'TRUE');
+    setStatus('checkin', 'ok', 'Dati caricati — riga ' + row);
+  } catch(e) {
+    setStatus('checkin', 'error', 'Errore: ' + e.message);
+  }
+}
+
+function setToggle(key, val) {
+  toggleState[key] = val;
+  const el = document.getElementById('toggle-' + key);
+  if (!el) return;
+  if (val) el.classList.add('on'); else el.classList.remove('on');
+}
+
+function setSliderVal(key, val) {
+  const input = document.getElementById('val-' + key);
+  const disp = document.getElementById('disp-' + key);
+  if (!input || val === '' || val === null || val === undefined) return;
+  input.value = val;
+  if (disp) disp.textContent = val;
+}
+
+function resetCheckinForm() {
+  document.getElementById('val-note').value = '';
+  document.getElementById('val-peso').value = '';
+  document.getElementById('val-passi').value = '';
+  setToggle('nutri', false); setToggle('wo', false); setToggle('dr', false);
+  setSliderVal('sonno', 7);
+  ['energia','libido','focus','stress','ansia'].forEach(k => setSliderVal(k, 5));
 }
 
 // ============================================================
@@ -812,20 +884,14 @@ async function saveCheckin() {
   const btn = document.getElementById('btn-save-checkin');
   btn.disabled = true;
   btn.innerHTML = '<span class="spinner"></span>Salvataggio...';
-  setStatus('checkin', 'loading', 'Ricerca riga di oggi...');
+  setStatus('checkin', 'loading', 'Ricerca riga...');
 
   try {
-    const row = await findTodayRow();
-    if (!row) { showToast('Data di oggi non trovata nel foglio', 'error'); setStatus('checkin', 'error', 'Data non trovata'); return; }
+    const row = await findRowForDate(currentDate);
+    if (!row) { showToast('Data non trovata nel foglio', 'error'); setStatus('checkin', 'error', 'Data non trovata'); return; }
 
     setStatus('checkin', 'loading', 'Salvataggio in corso...');
 
-    // Column mapping (1-indexed):
-    // A=data, B=note, C=positive loop, D=NUTRI, E=WO, F=peso, G=sonno, H=energia, I=libido, J=focus, K=stress, L=ansia, M=passi, N=down reg
-    // Column mapping (verified from sheet structure):
-    // A=data, B=note/eventi, D=NUTRI, E=WO, F=peso, G=sonno, H=energia,
-    // I=libido, J=focus, K=stress, L=ansia, M=passi, N=down reg
-    // C=Positive Loop is auto-calculated formula, skip it
     const updates = [
       { range: SHEET_PROTOCOL + '!B' + row, values: [[document.getElementById('val-note').value]] },
       { range: SHEET_PROTOCOL + '!D' + row, values: [[toggleState.nutri ? 'TRUE' : 'FALSE']] },
@@ -1083,7 +1149,7 @@ function setStatus(screen, state, text) {
 }
 
 // Init
-document.getElementById('today-date') && (document.getElementById('today-date').textContent = formatDate(new Date()));
+updateDateDisplay();
 </script>
 </body>
 </html>
