@@ -364,14 +364,9 @@
 
       <!-- Note -->
       <div class="card">
-        <div class="card-title">Note / Positive loop</div>
+        <div class="card-title">Note / eventi</div>
         <div class="field">
-          <label>Note / eventi</label>
           <textarea id="val-note" placeholder="Come è andata oggi?"></textarea>
-        </div>
-        <div class="field">
-          <label>Positive loop</label>
-          <textarea id="val-loop" placeholder="Una cosa positiva di oggi..."></textarea>
         </div>
       </div>
 
@@ -784,13 +779,17 @@ function todaySerial() {
 }
 
 async function findTodayRow() {
-  // The sheet has dates as Excel serials in column A, starting around row 4
-  const serial = todaySerial();
-  const data = await sheetsGet(SHEET_PROTOCOL + '!A4:A200');
+  const today = new Date();
+  const dd = String(today.getDate()).padStart(2, '0');
+  const mm = String(today.getMonth() + 1).padStart(2, '0');
+  const yyyy = today.getFullYear();
+  const todayStr = dd + '/' + mm + '/' + yyyy;
+
+  const data = await sheetsGet(SHEET_PROTOCOL + '!A5:A200');
   if (!data || !data.values) return null;
   for (let i = 0; i < data.values.length; i++) {
-    const v = parseInt(data.values[i][0]);
-    if (v === serial) return i + 4; // 1-indexed
+    const v = (data.values[i][0] || '').toString().trim();
+    if (v === todayStr) return i + 5; // 1-indexed, dates start at row 5
   }
   return null;
 }
@@ -823,9 +822,12 @@ async function saveCheckin() {
 
     // Column mapping (1-indexed):
     // A=data, B=note, C=positive loop, D=NUTRI, E=WO, F=peso, G=sonno, H=energia, I=libido, J=focus, K=stress, L=ansia, M=passi, N=down reg
+    // Column mapping (verified from sheet structure):
+    // A=data, B=note/eventi, D=NUTRI, E=WO, F=peso, G=sonno, H=energia,
+    // I=libido, J=focus, K=stress, L=ansia, M=passi, N=down reg
+    // C=Positive Loop is auto-calculated formula, skip it
     const updates = [
       { range: SHEET_PROTOCOL + '!B' + row, values: [[document.getElementById('val-note').value]] },
-      { range: SHEET_PROTOCOL + '!C' + row, values: [[document.getElementById('val-loop').value]] },
       { range: SHEET_PROTOCOL + '!D' + row, values: [[toggleState.nutri ? 'TRUE' : 'FALSE']] },
       { range: SHEET_PROTOCOL + '!E' + row, values: [[toggleState.wo ? 'TRUE' : 'FALSE']] },
       { range: SHEET_PROTOCOL + '!F' + row, values: [[document.getElementById('val-peso').value || '']] },
