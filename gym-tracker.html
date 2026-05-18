@@ -245,6 +245,12 @@
   .semaforo-val { font-family: 'Syne', sans-serif; font-size: 1.2rem; font-weight: 800; }
 
   .divider { height: 1px; background: var(--border); margin: 1rem 0; }
+  .week-btn {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 8px; color: var(--muted); font-family: 'DM Mono', monospace;
+    font-size: 0.8rem; padding: 0.35rem 0.65rem; cursor: pointer; transition: all 0.15s;
+  }
+  .week-btn.active { background: var(--accent); color: #0a0a0a; border-color: var(--accent); font-weight: 700; }
 </style>
 </head>
 <body>
@@ -387,29 +393,38 @@
     <div class="screen" id="screen-workout">
       <div class="sec-header">
         <div class="sec-title">Workout</div>
-        <div class="sec-sub">Settimana 1 — registra i tuoi pesi</div>
+        <div class="sec-sub">Seleziona settimana e workout</div>
+        <div style="display:flex;gap:0.5rem;margin-top:0.75rem;flex-wrap:wrap;" id="week-selector-btns">
+          <span style="font-size:0.7rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.08em;align-self:center;">Settimana:</span>
+          <button class="week-btn active" onclick="selectWeek(1)">W1</button>
+          <button class="week-btn" onclick="selectWeek(2)">W2</button>
+          <button class="week-btn" onclick="selectWeek(3)">W3</button>
+          <button class="week-btn" onclick="selectWeek(4)">W4</button>
+          <button class="week-btn" onclick="selectWeek(5)">W5</button>
+          <button class="week-btn" onclick="selectWeek(6)">W6</button>
+        </div>
       </div>
 
       <div id="wo-selector">
         <div class="card-title" style="margin-bottom:0.75rem;">Scegli il workout</div>
         <div class="wo-grid">
-          <div class="wo-card" onclick="selectWorkout('A')">
+          <div class="wo-card" onclick="selectWorkout('A', this)">
             <div class="wo-card-letter">A</div>
             <div class="wo-card-name">Schiena<br>Postura & Apertura</div>
           </div>
-          <div class="wo-card" onclick="selectWorkout('B')">
+          <div class="wo-card" onclick="selectWorkout('B', this)">
             <div class="wo-card-letter">B</div>
             <div class="wo-card-name">Gambe<br>Stabilità & Propriocezione</div>
           </div>
-          <div class="wo-card" onclick="selectWorkout('C')">
+          <div class="wo-card" onclick="selectWorkout('C', this)">
             <div class="wo-card-letter">C</div>
             <div class="wo-card-name">Petto & Spalle<br>Mobilità & Volume</div>
           </div>
-          <div class="wo-card" onclick="selectWorkout('D')">
+          <div class="wo-card" onclick="selectWorkout('D', this)">
             <div class="wo-card-letter">D</div>
             <div class="wo-card-name">Schiena & Gambe<br>Metabolico</div>
           </div>
-          <div class="wo-card" onclick="selectWorkout('BONUS')" style="grid-column:span 2">
+          <div class="wo-card" onclick="selectWorkout('BONUS', this)" style="grid-column:span 2">
             <div class="wo-card-letter">⭐</div>
             <div class="wo-card-name">TRX Hotel Energy<br>Workout in viaggio</div>
           </div>
@@ -599,8 +614,6 @@ const SHEET_ID = '1u5mT92ZEn8saxwBFowCbL1t96IWr361qXOwRspSxIVM';
 const SCOPES = 'https://www.googleapis.com/auth/spreadsheets';
 const SHEET_PROTOCOL = 'PERFORMANCE PROTOCOL (90 gg)';
 const SHEET_WO = 'WO-01 (45 GG)';
-const CURRENT_WEEK = 1; // W1
-
 let tokenClient = null;
 let accessToken = null;
 let drState = {};
@@ -690,11 +703,13 @@ const WORKOUTS = {
   }
 };
 
-// Row mapping for WO sheet (approximate rows per workout in the sheet)
-// Workout A exercises start at row 11, B at ~22, C at ~33, D at ~44, BONUS at ~56
-const WO_START_ROWS = { A: 11, B: 22, C: 33, D: 44, BONUS: 56 };
+// Exact row mapping from sheet (verified)
+const WO_START_ROWS = { A: 13, B: 26, C: 39, D: 52, BONUS: 66 };
 // W1=col E, W2=F, W3=G, W4=H, W5=I, W6=J
 const WO_WEEK_COLS = ['E', 'F', 'G', 'H', 'I', 'J'];
+// Exercises that use checkbox (ex numbers 1-based)
+const WO_CHECKBOX_EX = { A:[1,2,3,9], B:[1,2,3,9], C:[1,2,3,9], D:[1,2,3,9], BONUS:[1,2,3,4,5,6,7,8,9,10] };
+let currentWeek = 1;
 
 // ============================================================
 // GOOGLE AUTH
@@ -962,18 +977,38 @@ async function saveCheckin() {
 // ============================================================
 // WORKOUT
 // ============================================================
-function selectWorkout(key) {
+function selectWeek(w) {
+  currentWeek = w;
+  document.querySelectorAll('.week-btn').forEach((b, i) => {
+    if (i + 1 === w) b.classList.add('active'); else b.classList.remove('active');
+  });
+  // If a workout is already selected, reload its data
+  if (selectedWorkout) {
+    loadWorkoutData(selectedWorkout);
+  }
+}
+
+function selectWeek(w) {
+  currentWeek = w;
+  document.querySelectorAll('.week-btn').forEach((b, i) => {
+    if (i + 1 === w) b.classList.add('active'); else b.classList.remove('active');
+  });
+  if (selectedWorkout) loadWorkoutData(selectedWorkout);
+}
+
+function selectWorkout(key, el) {
   selectedWorkout = key;
   document.querySelectorAll('.wo-card').forEach(c => c.classList.remove('selected'));
-  event.currentTarget.classList.add('selected');
+  if (el) el.classList.add('selected');
 
   const wo = WORKOUTS[key];
   document.getElementById('wo-selector').style.display = 'none';
   document.getElementById('wo-detail').style.display = 'block';
-  document.getElementById('wo-detail-title').textContent = wo.name;
+  document.getElementById('wo-detail-title').textContent = wo.name + ' — W' + currentWeek;
   document.getElementById('wo-detail-sub').textContent = wo.sub;
 
-  renderExercises(wo.exercises);
+  renderExercises(key, wo.exercises);
+  loadWorkoutData(key);
 }
 
 function backToSelector() {
@@ -982,7 +1017,11 @@ function backToSelector() {
   selectedWorkout = null;
 }
 
-function renderExercises(exercises) {
+function isCheckbox(key, n) {
+  return WO_CHECKBOX_EX[key] && WO_CHECKBOX_EX[key].indexOf(n) !== -1;
+}
+
+function renderExercises(key, exercises) {
   const list = document.getElementById('exercise-list');
   list.innerHTML = '';
   exercises.forEach(ex => {
@@ -991,26 +1030,65 @@ function renderExercises(exercises) {
     div.id = 'ex-' + ex.n;
 
     let inputHTML = '';
-    if (ex.inputType === 'check') {
-      inputHTML = '<button class="toggle" id="ex-toggle-' + ex.n + '" onclick="toggleEx(' + ex.n + ')"></button>';
-    } else if (ex.inputType === 'weight') {
-      inputHTML = '<div class="ex-input-row">' +
-        '<div><input type="number" id="ex-kg-' + ex.n + '" placeholder="kg" step="0.5"><span class="ex-input-label">Peso (kg)</span></div>' +
-        '<div><input type="number" id="ex-reps-' + ex.n + '" placeholder="reps"><span class="ex-input-label">Reps</span></div>' +
+    if (isCheckbox(key, ex.n)) {
+      inputHTML = '<div style="display:flex;align-items:center;justify-content:space-between;margin-top:0.5rem;">' +
+        '<span style="font-size:0.75rem;color:var(--muted);">Completato</span>' +
+        '<button class="toggle" id="ex-toggle-' + ex.n + '" onclick="toggleEx(' + ex.n + ')"></button>' +
         '</div>';
-    } else if (ex.inputType === 'reps') {
-      inputHTML = '<div class="ex-input-row">' +
-        '<div><input type="number" id="ex-reps-' + ex.n + '" placeholder="reps/sec"><span class="ex-input-label">Reps/Sec</span></div>' +
+    } else {
+      inputHTML = '<div class="ex-input-row" style="margin-top:0.5rem;">' +
+        '<div><input type="number" id="ex-kg-' + ex.n + '" placeholder="kg" step="0.5"><span class="ex-input-label">Peso (kg)</span></div>' +
+        '<div style="font-size:1.2rem;color:var(--muted);align-self:center;padding-top:0.2rem;">×</div>' +
+        '<div><input type="number" id="ex-reps-' + ex.n + '" placeholder="reps"><span class="ex-input-label">Reps</span></div>' +
         '</div>';
     }
 
     div.innerHTML =
-      '<div class="ex-num">Esercizio ' + ex.n + '</div>' +
+      '<div class="ex-num">Es. ' + ex.n + '</div>' +
       '<div class="ex-name">' + ex.name + '</div>' +
       '<div class="ex-meta"><span class="ex-tag">' + ex.sets + '</span><span class="ex-tag">⏱ ' + ex.pause + '</span></div>' +
       inputHTML;
     list.appendChild(div);
   });
+}
+
+async function loadWorkoutData(key) {
+  setStatus('wo', 'loading', 'Caricamento W' + currentWeek + '...');
+  try {
+    const wo = WORKOUTS[key];
+    const colLetter = WO_WEEK_COLS[currentWeek - 1];
+    const startRow = WO_START_ROWS[key];
+    const endRow = startRow + wo.exercises.length - 1;
+    const data = await sheetsGet(SHEET_WO + '!' + colLetter + startRow + ':' + colLetter + endRow);
+
+    if (!data || !data.values) { setStatus('wo', 'ok', 'Nessun dato per W' + currentWeek); return; }
+
+    wo.exercises.forEach((ex, idx) => {
+      const val = data.values[idx] ? (data.values[idx][0] + '') : '';
+      if (isCheckbox(key, ex.n)) {
+        const btn = document.getElementById('ex-toggle-' + ex.n);
+        if (btn) { if (val === 'TRUE') btn.classList.add('on'); else btn.classList.remove('on'); }
+      } else {
+        if (!val) return;
+        // Try to parse "50kg x 8" or "50 x 8" formats
+        const parts = val.toString().split(/[xX×]/);
+        if (parts.length >= 2) {
+          const kgVal = parts[0].toString().replace(/[^0-9.]/g, '').trim();
+          const repsVal = parts[1].toString().replace(/[^0-9]/g, '').trim();
+          const kgEl = document.getElementById('ex-kg-' + ex.n);
+          const repsEl = document.getElementById('ex-reps-' + ex.n);
+          if (kgEl && kgVal) kgEl.value = kgVal;
+          if (repsEl && repsVal) repsEl.value = repsVal;
+        } else {
+          const kgEl = document.getElementById('ex-kg-' + ex.n);
+          if (kgEl && val) kgEl.value = val.toString().replace(/[^0-9.]/g, '');
+        }
+      }
+    });
+    setStatus('wo', 'ok', 'W' + currentWeek + ' caricata');
+  } catch(e) {
+    setStatus('wo', 'error', 'Errore: ' + e.message);
+  }
 }
 
 function toggleEx(n) {
@@ -1023,46 +1101,39 @@ async function saveWorkout() {
   const btn = document.getElementById('btn-save-wo');
   btn.disabled = true;
   btn.innerHTML = '<span class="spinner"></span>Salvataggio...';
-  setStatus('wo', 'loading', 'Salvataggio workout...');
+  setStatus('wo', 'loading', 'Salvataggio W' + currentWeek + '...');
 
   try {
     const wo = WORKOUTS[selectedWorkout];
-    const colLetter = WO_WEEK_COLS[CURRENT_WEEK - 1]; // W1 = E
+    const colLetter = WO_WEEK_COLS[currentWeek - 1];
     const startRow = WO_START_ROWS[selectedWorkout];
     const updates = [];
 
     wo.exercises.forEach((ex, idx) => {
       const row = startRow + idx;
       let val = '';
-      if (ex.inputType === 'check') {
-        const btn = document.getElementById('ex-toggle-' + ex.n);
-        val = btn && btn.classList.contains('on') ? 'TRUE' : 'FALSE';
-      } else if (ex.inputType === 'weight') {
+      if (isCheckbox(selectedWorkout, ex.n)) {
+        const toggle = document.getElementById('ex-toggle-' + ex.n);
+        val = toggle && toggle.classList.contains('on') ? 'TRUE' : 'FALSE';
+      } else {
         const kg = document.getElementById('ex-kg-' + ex.n);
         const reps = document.getElementById('ex-reps-' + ex.n);
-        const kgVal = kg ? kg.value : '';
-        const repsVal = reps ? reps.value : '';
+        const kgVal = kg ? kg.value.trim() : '';
+        const repsVal = reps ? reps.value.trim() : '';
         val = kgVal && repsVal ? kgVal + 'kg x ' + repsVal : (kgVal || repsVal || '');
-      } else if (ex.inputType === 'reps') {
-        const reps = document.getElementById('ex-reps-' + ex.n);
-        val = reps ? reps.value : '';
       }
-      if (val !== '') {
-        updates.push({ range: SHEET_WO + '!' + colLetter + row, values: [[val]] });
-      }
+      updates.push({ range: SHEET_WO + '!' + colLetter + row, values: [[val]] });
     });
 
-    if (updates.length === 0) { showToast('Nessun dato da salvare', 'error'); return; }
-
     await sheetsBatchUpdate(updates);
-    showToast('Workout salvato!', 'success');
+    showToast('W' + currentWeek + ' salvata!', 'success');
     setStatus('wo', 'ok', updates.length + ' celle aggiornate');
   } catch (e) {
     showToast('Errore: ' + e.message, 'error');
     setStatus('wo', 'error', 'Errore salvataggio');
   } finally {
     btn.disabled = false;
-    btn.textContent = 'Salva Workout';
+    btn.textContent = 'Salva Workout W' + currentWeek;
   }
 }
 
