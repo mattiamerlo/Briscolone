@@ -982,17 +982,6 @@ function selectWeek(w) {
   document.querySelectorAll('.week-btn').forEach((b, i) => {
     if (i + 1 === w) b.classList.add('active'); else b.classList.remove('active');
   });
-  // If a workout is already selected, reload its data
-  if (selectedWorkout) {
-    loadWorkoutData(selectedWorkout);
-  }
-}
-
-function selectWeek(w) {
-  currentWeek = w;
-  document.querySelectorAll('.week-btn').forEach((b, i) => {
-    if (i + 1 === w) b.classList.add('active'); else b.classList.remove('active');
-  });
   if (selectedWorkout) loadWorkoutData(selectedWorkout);
 }
 
