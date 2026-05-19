@@ -1154,6 +1154,9 @@ async function loadStats() {
     // Use short date as label (dd/mm)
     const labels = last30.map(r => (r[0]+'').trim().substring(0,5));
     const toNum = v => { if (!v) return null; const n = parseFloat((v+'').replace(',','.')); return isNaN(n) ? null : n; };
+    // DEBUG - mostra prime 3 righe in console
+    if (rows.length > 0) console.log('Prima riga dati:', JSON.stringify(rows[0]));
+    if (rows.length > 1) console.log('Seconda riga dati:', JSON.stringify(rows[1]));
     const pesi = last30.map(r => toNum(r[5]));
     const sonni = last30.map(r => toNum(r[6]));
     const energie = last30.map(r => toNum(r[7]));
