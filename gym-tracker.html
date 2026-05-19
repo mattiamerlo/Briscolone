@@ -278,7 +278,10 @@
 <!-- APP -->
 <div id="app">
   <div class="topbar">
-    <div class="topbar-title">GYM<span style="color:var(--accent)">.</span></div>
+    <div>
+      <div class="topbar-title">GYM<span style="color:var(--accent)">.</span></div>
+      <div style="font-size:0.55rem;color:var(--muted);font-family:'DM Mono',monospace;">v 19/05/2026 07:44</div>
+    </div>
     <div class="user-chip">
       <div class="dot"></div>
       <span id="user-name-chip">Mattia</span>
@@ -1141,19 +1144,21 @@ async function loadStats() {
   setStatus('stats', 'loading', 'Caricamento dati...');
   try {
     // Load last 30 rows of data: cols A(date), F(peso), G(sonno), H(energia), K(stress), E(wo)
-    const data = await sheetsGet(SHEET_PROTOCOL + '!A4:N200');
+    const data = await sheetsGet(SHEET_PROTOCOL + '!A5:N200');
     if (!data || !data.values) { setStatus('stats', 'error', 'Nessun dato'); return; }
 
-    const rows = data.values.filter(r => r[0] && !isNaN(parseInt(r[0])));
+    // Filter rows that have a date in dd/mm/yyyy format and at least one value
+    const rows = data.values.filter(r => r[0] && /^\d{2}\/\d{2}\/\d{4}$/.test((r[0]+'').trim()));
     const last30 = rows.slice(-30);
 
-    const labels = last30.map((_, i) => '' + (i + 1));
+    // Use short date as label (dd/mm)
+    const labels = last30.map(r => (r[0]+'').trim().substring(0,5));
     const toNum = v => { if (!v) return null; const n = parseFloat((v+'').replace(',','.')); return isNaN(n) ? null : n; };
     const pesi = last30.map(r => toNum(r[5]));
     const sonni = last30.map(r => toNum(r[6]));
     const energie = last30.map(r => toNum(r[7]));
     const stress = last30.map(r => toNum(r[10]));
-    const woCount = rows.filter(r => r[4] === 'TRUE').length;
+    const woCount = rows.filter(r => (r[4]+'').toUpperCase() === 'TRUE').length;
 
     // Summary cards
     const latestPeso = pesi.filter(Boolean).slice(-1)[0];
