@@ -280,7 +280,7 @@
   <div class="topbar">
     <div>
       <div class="topbar-title">GYM<span style="color:var(--accent)">.</span></div>
-      <div style="font-size:0.55rem;color:var(--muted);font-family:'DM Mono',monospace;">v 19/05/2026 08:18</div>
+      <div style="font-size:0.55rem;color:var(--muted);font-family:'DM Mono',monospace;">v 19/05/2026 08:30</div>
     </div>
     <div class="user-chip">
       <div class="dot"></div>
@@ -1147,12 +1147,25 @@ async function loadStats() {
     const data = await sheetsGet(SHEET_PROTOCOL + '!A5:N200');
     if (!data || !data.values) { setStatus('stats', 'error', 'Nessun dato'); return; }
 
-    // Filter rows that have a date in dd/mm/yyyy format and at least one value
-    const rows = data.values.filter(r => r[0] && /^\d{2}\/\d{2}\/\d{4}$/.test((r[0]+'').trim()));
+    // Filter rows with a date (dd/mm/yyyy string or Excel serial >40000)
+    const rows = data.values.filter(function(r) {
+      if (!r[0]) return false;
+      const v = (r[0]+'').trim();
+      if (/^\d{2}\/\d{2}\/\d{4}$/.test(v)) return true;
+      const n = parseFloat(v);
+      return !isNaN(n) && n > 40000;
+    });
     const last30 = rows.slice(-30);
-
-    // Use short date as label (dd/mm)
-    const labels = last30.map(r => (r[0]+'').trim().substring(0,5));
+    const labels = last30.map(function(r) {
+      const v = (r[0]+'').trim();
+      if (/^\d{2}\/\d{2}\/\d{4}$/.test(v)) return v.substring(0,5);
+      const n = parseFloat(v);
+      if (!isNaN(n) && n > 40000) {
+        const d = new Date(Math.round((n - 25569) * 86400 * 1000));
+        return String(d.getDate()).padStart(2,'0') + '/' + String(d.getMonth()+1).padStart(2,'0');
+      }
+      return v.substring(0,5);
+    });
     const toNum = v => { if (!v) return null; const n = parseFloat((v+'').replace(',','.')); return isNaN(n) ? null : n; };
     // DEBUG - mostra prime 3 righe in console
     if (rows.length > 0) console.log('Prima riga dati:', JSON.stringify(rows[0]));
