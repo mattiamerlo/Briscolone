@@ -280,7 +280,7 @@
   <div class="topbar">
     <div>
       <div class="topbar-title">GYM<span style="color:var(--accent)">.</span></div>
-      <div style="font-size:0.55rem;color:var(--muted);font-family:'DM Mono',monospace;">v 19/05/2026 08:38</div>
+      <div style="font-size:0.55rem;color:var(--muted);font-family:'DM Mono',monospace;">v 19/05/2026 08:45</div>
     </div>
     <div class="user-chip">
       <div class="dot"></div>
@@ -1156,7 +1156,9 @@ async function loadStats() {
       const n = parseFloat(v);
       return !isNaN(n) && n > 40000;
     });
-    const last30 = rows.slice(-30);
+    // Prendi solo righe con almeno un dato (F,G,H,K non vuoti)
+    const rowsWithData = rows.filter(r => r[5] || r[6] || r[7] || r[10]);
+    const last30 = rowsWithData.slice(-30);
     const labels = last30.map(function(r) {
       const v = (r[0]+'').trim();
       if (/^\d{2}\/\d{2}\/\d{4}$/.test(v)) return v.substring(0,5);
