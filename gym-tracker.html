@@ -699,6 +699,12 @@ const WORKOUTS = {
   }
 };
 
+// Exact row mapping from sheet
+const WO_START_ROWS = { A: 13, B: 26, C: 39, D: 52, BONUS: 66 };
+// W1=col E, W2=F, W3=G, W4=H, W5=I, W6=J
+const WO_WEEK_COLS = ['E', 'F', 'G', 'H', 'I', 'J'];
+let currentWeek = 1;
+
 // ============================================================
 // GOOGLE AUTH
 // ============================================================
@@ -1254,10 +1260,7 @@ function setStatus(screen, state, text) {
 updateDateDisplay();
 tryAutoSignIn();
 
-// Register service worker for PWA
-if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('gym-sw.js').catch(function() {});
-}
+// Service worker rimosso per evitare problemi di cache
 </script>
 </body>
 </html>
