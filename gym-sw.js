@@ -1,4 +1,4 @@
-const CACHE = 'gym-tracker-v1';
+const CACHE = 'gym-tracker-v2';
 const SHELL = [
   '/Briscolone/gym-tracker.html',
   '/Briscolone/gym-manifest.json',
