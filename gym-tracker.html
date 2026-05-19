@@ -280,7 +280,7 @@
   <div class="topbar">
     <div>
       <div class="topbar-title">GYM<span style="color:var(--accent)">.</span></div>
-      <div style="font-size:0.55rem;color:var(--muted);font-family:'DM Mono',monospace;">v 19/05/2026 08:30</div>
+      <div style="font-size:0.55rem;color:var(--muted);font-family:'DM Mono',monospace;">v 19/05/2026 08:38</div>
     </div>
     <div class="user-chip">
       <div class="dot"></div>
@@ -500,6 +500,7 @@
         <div class="chart-wrap"><canvas id="chart-energia"></canvas></div>
       </div>
 
+      <div id="stats-debug" style="font-size:0.7rem;color:var(--muted);background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:0.75rem;margin-top:0.5rem;word-break:break-all;"></div>
       <button class="btn-secondary" style="margin-top:0.5rem;" onclick="loadStats()">🔄 Aggiorna</button>
     </div>
 
@@ -1175,6 +1176,17 @@ async function loadStats() {
     const energie = last30.map(r => toNum(r[7]));
     const stress = last30.map(r => toNum(r[10]));
     const woCount = rows.filter(r => (r[4]+'').toUpperCase() === 'TRUE').length;
+
+    // DEBUG visibile nell'app
+    const debugEl = document.getElementById('stats-debug');
+    if (debugEl) {
+      const sample = rows.slice(-3);
+      debugEl.innerHTML = 
+        '<b>Righe trovate:</b> ' + rows.length + '<br>' +
+        '<b>Ultime 3 righe (A,F,G,H):</b><br>' +
+        sample.map(r => 'A=' + r[0] + ' F=' + r[5] + ' G=' + r[6] + ' H=' + r[7]).join('<br>') +
+        '<br><b>Pesi parsati:</b> ' + last30.map(r => toNum(r[5])).filter(Boolean).join(', ');
+    }
 
     // Summary cards
     const latestPeso = pesi.filter(Boolean).slice(-1)[0];
