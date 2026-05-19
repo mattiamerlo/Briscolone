@@ -1148,10 +1148,11 @@ async function loadStats() {
     const last30 = rows.slice(-30);
 
     const labels = last30.map((_, i) => '' + (i + 1));
-    const pesi = last30.map(r => parseFloat(r[5]) || null);
-    const sonni = last30.map(r => parseFloat(r[6]) || null);
-    const energie = last30.map(r => parseFloat(r[7]) || null);
-    const stress = last30.map(r => parseFloat(r[10]) || null);
+    const toNum = v => { if (!v) return null; const n = parseFloat((v+'').replace(',','.')); return isNaN(n) ? null : n; };
+    const pesi = last30.map(r => toNum(r[5]));
+    const sonni = last30.map(r => toNum(r[6]));
+    const energie = last30.map(r => toNum(r[7]));
+    const stress = last30.map(r => toNum(r[10]));
     const woCount = rows.filter(r => r[4] === 'TRUE').length;
 
     // Summary cards
@@ -1159,9 +1160,9 @@ async function loadStats() {
     const avgSonno = avg(sonni.filter(Boolean));
     const avgEnergia = avg(energie.filter(Boolean));
 
-    document.getElementById('stat-peso').textContent = latestPeso ? latestPeso + ' kg' : '—';
-    document.getElementById('stat-sonno').textContent = avgSonno ? avgSonno.toFixed(1) + 'h' : '—';
-    document.getElementById('stat-energia').textContent = avgEnergia ? avgEnergia.toFixed(1) : '—';
+    document.getElementById('stat-peso').textContent = latestPeso ? latestPeso.toString().replace('.',',') + ' kg' : '—';
+    document.getElementById('stat-sonno').textContent = avgSonno ? avgSonno.toFixed(1).replace('.',',') + 'h' : '—';
+    document.getElementById('stat-energia').textContent = avgEnergia ? avgEnergia.toFixed(1).replace('.',',') : '—';
     document.getElementById('stat-wo').textContent = woCount;
 
     // Charts
