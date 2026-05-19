@@ -624,92 +624,80 @@ let chartPeso = null, chartSonno = null, chartEnergia = null;
 // ============================================================
 // WORKOUT DATA
 // ============================================================
+// numSets=0 means checkbox, >0 means that many weight input fields
 const WORKOUTS = {
   A: {
-    name: 'Workout A',
-    sub: 'Schiena — Postura & Apertura',
+    name: 'Workout A', sub: 'Schiena — Postura & Apertura',
     exercises: [
-      { n: 1, name: 'Mobilità articolare: 20x spalle (YWT), 30x Squat laterale, 10x Rachide (Cat-Cow)', sets: '1 x 3\'', pause: '-', inputType: 'check' },
-      { n: 2, name: 'Propriocezione: Kakasana (tenuta con le ginocchia sopra le braccia)', sets: '2 x Iso Max', pause: '0"', inputType: 'check' },
-      { n: 3, name: 'Recupero attivo: Respirazione diaframmatica', sets: '2 x (4in 8out)', pause: '0"', inputType: 'check' },
-      { n: 4, name: 'Pull-down a braccia tese', sets: '4 x 6-8', pause: '60"', inputType: 'weight' },
-      { n: 5, name: 'Lat Machine Presa Neutra', sets: '3 x 8-10', pause: '60"', inputType: 'weight' },
-      { n: 6, name: 'Rematore con manubrio su panca', sets: '3 x 10-12', pause: '60"', inputType: 'weight' },
-      { n: 7, name: 'Face-pull ai cavi', sets: '4 x 15', pause: '60"', inputType: 'weight' },
-      { n: 8, name: 'Dead Hang (Appeso alla sbarra)', sets: '3 x Max', pause: '60"', inputType: 'reps' },
-      { n: 9, name: 'Defaticamento: Allungamento muscoli allenati', sets: '1 x 3 Esp.', pause: '0"', inputType: 'check' },
+      { n:1,  name:'Mobilità articolare: 20x spalle (YWT), 30x Squat laterale, 10x Rachide (Cat-Cow)', sets:"1 x 3'", pause:'-', numSets:0 },
+      { n:2,  name:'Propriocezione: Kakasana (tenuta con le ginocchia sopra le braccia)', sets:'2 x Iso Max', pause:'0"', numSets:0 },
+      { n:3,  name:'Recupero attivo: Respirazione diaframmatica', sets:'2 x (4in 8out)', pause:'0"', numSets:0 },
+      { n:4,  name:'Pull-down a braccia tese', sets:'4 x 6-8', pause:'60"', numSets:4 },
+      { n:5,  name:'Lat Machine Presa Neutra', sets:'3 x 8-10', pause:'60"', numSets:3 },
+      { n:6,  name:'Rematore con manubrio su panca', sets:'3 x 10-12', pause:'60"', numSets:3 },
+      { n:7,  name:'Face-pull ai cavi', sets:'4 x 15', pause:'60"', numSets:4 },
+      { n:8,  name:'Dead Hang (Appeso alla sbarra)', sets:'3 x Max', pause:'60"', numSets:3 },
+      { n:9,  name:'Defaticamento: Allungamento muscoli allenati', sets:'1 x 3 Esp.', pause:'0"', numSets:0 },
     ]
   },
   B: {
-    name: 'Workout B',
-    sub: 'Gambe — Stabilità & Propriocezione',
+    name: 'Workout B', sub: 'Gambe — Stabilità & Propriocezione',
     exercises: [
-      { n: 1, name: 'Mobilità articolare: 20x spalle (YWT), 30x Squat laterale, 10x Rachide (Cat-Cow)', sets: '1 x 3\'', pause: '-', inputType: 'check' },
-      { n: 2, name: 'Propriocezione: Utthita Ashwa Sanchalanasana (Affondo Alto)', sets: '2 x Iso Max', pause: '0"', inputType: 'check' },
-      { n: 3, name: 'Recupero attivo: Respirazione diaframmatica', sets: '2 x (4in 8out)', pause: '0"', inputType: 'check' },
-      { n: 4, name: 'Leg Press a 45°', sets: '3 x 10-12', pause: '60"', inputType: 'weight' },
-      { n: 5, name: 'Bulgarian Split Squat', sets: '3 x 8-10', pause: '60"', inputType: 'weight' },
-      { n: 6, name: 'Leg Curl (Seduto)', sets: '3 x 10-12', pause: '60"', inputType: 'weight' },
-      { n: 7, name: 'Calf Raise (Polpacci)', sets: '4 x 15', pause: '60"', inputType: 'weight' },
-      { n: 8, name: 'Plank Dinamico (Tap spalle)', sets: '3 x Max (>40")', pause: '60"', inputType: 'reps' },
-      { n: 9, name: 'Defaticamento: Allungamento muscoli allenati', sets: '1 x 3 Esp.', pause: '0"', inputType: 'check' },
+      { n:1,  name:'Mobilità articolare: 20x spalle (YWT), 30x Squat laterale, 10x Rachide (Cat-Cow)', sets:"1 x 3'", pause:'-', numSets:0 },
+      { n:2,  name:'Propriocezione: Utthita Ashwa Sanchalanasana (Affondo Alto)', sets:'2 x Iso Max', pause:'0"', numSets:0 },
+      { n:3,  name:'Recupero attivo: Respirazione diaframmatica', sets:'2 x (4in 8out)', pause:'0"', numSets:0 },
+      { n:4,  name:'Leg Press a 45°', sets:'3 x 10-12', pause:'60"', numSets:3 },
+      { n:5,  name:'Bulgarian Split Squat', sets:'3 x 8-10', pause:'60"', numSets:3 },
+      { n:6,  name:'Leg Curl (Seduto)', sets:'3 x 10-12', pause:'60"', numSets:3 },
+      { n:7,  name:'Calf Raise (Polpacci)', sets:'4 x 15', pause:'60"', numSets:4 },
+      { n:8,  name:'Plank Dinamico (Tap spalle)', sets:'3 x Max (>40")', pause:'60"', numSets:3 },
+      { n:9,  name:'Defaticamento: Allungamento muscoli allenati', sets:'1 x 3 Esp.', pause:'0"', numSets:0 },
     ]
   },
   C: {
-    name: 'Workout C',
-    sub: 'Petto & Spalle — Mobilità & Volume',
+    name: 'Workout C', sub: 'Petto & Spalle — Mobilità & Volume',
     exercises: [
-      { n: 1, name: 'Mobilità articolare: 20x spalle (YWT), 30x Squat laterale, 10x Rachide (Cat-Cow)', sets: '1 x 3\'', pause: '-', inputType: 'check' },
-      { n: 2, name: 'Propriocezione: Push up su pedana propriocettiva', sets: '2 x Iso Max', pause: '0"', inputType: 'check' },
-      { n: 3, name: 'Recupero attivo: Respirazione diaframmatica', sets: '2 x (4in 8out)', pause: '0"', inputType: 'check' },
-      { n: 4, name: 'Chest Press Machine', sets: '3 x 10-12', pause: '60"', inputType: 'weight' },
-      { n: 5, name: 'Croci ai cavi alti', sets: '3 x 12-15', pause: '60"', inputType: 'weight' },
-      { n: 6, name: 'Distensioni verticali', sets: '3 x 10-12', pause: '60"', inputType: 'weight' },
-      { n: 7, name: 'Alzate Laterali (Busto flesso)', sets: '3 x 15', pause: '60"', inputType: 'weight' },
-      { n: 8, name: 'Alzata frontale con disco', sets: '3 x Max (>40")', pause: '60"', inputType: 'reps' },
-      { n: 9, name: 'Defaticamento: Allungamento muscoli allenati', sets: '1 x 3 Esp.', pause: '0"', inputType: 'check' },
+      { n:1,  name:'Mobilità articolare: 20x spalle (YWT), 30x Squat laterale, 10x Rachide (Cat-Cow)', sets:"1 x 3'", pause:'-', numSets:0 },
+      { n:2,  name:'Propriocezione: Push up su pedana propriocettiva', sets:'2 x Iso Max', pause:'0"', numSets:0 },
+      { n:3,  name:'Recupero attivo: Respirazione diaframmatica', sets:'2 x (4in 8out)', pause:'0"', numSets:0 },
+      { n:4,  name:'Chest Press Machine', sets:'3 x 10-12', pause:'60"', numSets:3 },
+      { n:5,  name:'Croci ai cavi alti', sets:'3 x 12-15', pause:'60"', numSets:3 },
+      { n:6,  name:'Distensioni verticali', sets:'3 x 10-12', pause:'60"', numSets:3 },
+      { n:7,  name:'Alzate Laterali (Busto flesso)', sets:'3 x 15', pause:'60"', numSets:3 },
+      { n:8,  name:'Alzata frontale con disco', sets:'3 x Max (>40")', pause:'60"', numSets:3 },
+      { n:9,  name:'Defaticamento: Allungamento muscoli allenati', sets:'1 x 3 Esp.', pause:'0"', numSets:0 },
     ]
   },
   D: {
-    name: 'Workout D',
-    sub: 'Schiena & Gambe — Metabolico',
+    name: 'Workout D', sub: 'Schiena & Gambe — Metabolico',
     exercises: [
-      { n: 1, name: 'Mobilità articolare: 20x spalle (YWT), 30x Squat laterale, 10x Rachide (Cat-Cow)', sets: '1 x 3\'', pause: '-', inputType: 'check' },
-      { n: 2, name: 'Propriocezione: Fitball Plank con crunch', sets: '2 x 3-12 Rps', pause: '0"', inputType: 'check' },
-      { n: 3, name: 'Recupero attivo: Respirazione diaframmatica', sets: '2 x (4in 8out)', pause: '30"', inputType: 'check' },
-      { n: 4, name: 'Deadlift (Stacco da terra)', sets: '3 x 8-10', pause: '90"', inputType: 'weight' },
-      { n: 5, name: 'Goblet Squat (Manubrio al petto)', sets: '3 x 12-15', pause: '60"', inputType: 'weight' },
-      { n: 6, name: 'Hyperextension (Focus Glutei)', sets: '3 x 10-12', pause: '60"', inputType: 'weight' },
-      { n: 7, name: 'Pulley Basso (Presa larga)', sets: '3 x 15', pause: '60"', inputType: 'weight' },
-      { n: 8, name: 'Dead bug', sets: '3 x 10', pause: '60"', inputType: 'reps' },
-      { n: 9, name: 'Defaticamento: Allungamento muscoli allenati', sets: '1 x 3 Esp.', pause: '0"', inputType: 'check' },
+      { n:1,  name:'Mobilità articolare: 20x spalle (YWT), 30x Squat laterale, 10x Rachide (Cat-Cow)', sets:"1 x 3'", pause:'-', numSets:0 },
+      { n:2,  name:'Propriocezione: Fitball Plank con crunch', sets:'2 x 3-12 Rps', pause:'0"', numSets:0 },
+      { n:3,  name:'Recupero attivo: Respirazione diaframmatica', sets:'2 x (4in 8out)', pause:'30"', numSets:0 },
+      { n:4,  name:'Deadlift (Stacco da terra)', sets:'3 x 8-10', pause:'90"', numSets:3 },
+      { n:5,  name:'Goblet Squat (Manubrio al petto)', sets:'3 x 12-15', pause:'60"', numSets:3 },
+      { n:6,  name:'Hyperextension (Focus Glutei)', sets:'3 x 10-12', pause:'60"', numSets:3 },
+      { n:7,  name:'Pulley Basso (Presa larga)', sets:'3 x 15', pause:'60"', numSets:3 },
+      { n:8,  name:'Dead bug', sets:'3 x 10', pause:'60"', numSets:3 },
+      { n:9,  name:'Defaticamento: Allungamento muscoli allenati', sets:'1 x 3 Esp.', pause:'0"', numSets:0 },
     ]
   },
   BONUS: {
-    name: 'Workout Bonus',
-    sub: 'TRX Hotel Energy — In viaggio',
+    name: 'Workout Bonus', sub: 'TRX Hotel Energy — In viaggio',
     exercises: [
-      { n: 1, name: 'Mobilità articolare: 20x spalle (YWT), 30x Squat laterale, 10x Rachide (Cat-Cow)', sets: '1 x 3\'', pause: '-', inputType: 'check' },
-      { n: 2, name: 'TRX: Squat Profondo', sets: '2 x 20', pause: '30-45"', inputType: 'check' },
-      { n: 3, name: 'TRX: Squat + Trazioni', sets: '3 x 15-20 (esplosivi)', pause: '30-45"', inputType: 'check' },
-      { n: 4, name: 'TRX: Alzate Frontali Unilaterali', sets: '3 x 8-10 (lenti)', pause: '30-45"', inputType: 'check' },
-      { n: 5, name: 'TRX: FacePull + Apertura a T', sets: '3 x 20', pause: '30-45"', inputType: 'check' },
-      { n: 6, name: 'TRX: Pistol Squat', sets: '3 x Max', pause: '30-45"', inputType: 'check' },
-      { n: 7, name: 'TRX: Leg Curl', sets: '3 x 6-10', pause: '30-45"', inputType: 'check' },
-      { n: 8, name: 'TRX: French Press (Tricipiti)', sets: '3 x 8-10', pause: '0"', inputType: 'check' },
-      { n: 9, name: 'TRX: Curl (Bicipiti)', sets: '3 x 8-10', pause: '30-45"', inputType: 'check' },
-      { n: 10, name: 'Defaticamento: Allungamento muscoli allenati', sets: '1 x 3 Esp.', pause: '0"', inputType: 'check' },
+      { n:1,  name:'Mobilità articolare', sets:"1 x 3'", pause:'-', numSets:0 },
+      { n:2,  name:'TRX: Squat Profondo', sets:'2 x 20', pause:'30-45"', numSets:0 },
+      { n:3,  name:'TRX: Squat + Trazioni', sets:'3 x 15-20 (esplosivi)', pause:'30-45"', numSets:0 },
+      { n:4,  name:'TRX: Alzate Frontali Unilaterali', sets:'3 x 8-10 (lenti)', pause:'30-45"', numSets:0 },
+      { n:5,  name:'TRX: FacePull + Apertura a T', sets:'3 x 20', pause:'30-45"', numSets:0 },
+      { n:6,  name:'TRX: Pistol Squat', sets:'3 x Max', pause:'30-45"', numSets:0 },
+      { n:7,  name:'TRX: Leg Curl', sets:'3 x 6-10', pause:'30-45"', numSets:0 },
+      { n:8,  name:'TRX: French Press (Tricipiti)', sets:'3 x 8-10', pause:'0"', numSets:0 },
+      { n:9,  name:'TRX: Curl (Bicipiti)', sets:'3 x 8-10', pause:'30-45"', numSets:0 },
+      { n:10, name:'Defaticamento: Allungamento muscoli allenati', sets:'1 x 3 Esp.', pause:'0"', numSets:0 },
     ]
   }
 };
-
-// Exact row mapping from sheet (verified)
-const WO_START_ROWS = { A: 13, B: 26, C: 39, D: 52, BONUS: 66 };
-// W1=col E, W2=F, W3=G, W4=H, W5=I, W6=J
-const WO_WEEK_COLS = ['E', 'F', 'G', 'H', 'I', 'J'];
-// Exercises that use checkbox (ex numbers 1-based)
-const WO_CHECKBOX_EX = { A:[1,2,3,9], B:[1,2,3,9], C:[1,2,3,9], D:[1,2,3,9], BONUS:[1,2,3,4,5,6,7,8,9,10] };
-let currentWeek = 1;
 
 // ============================================================
 // GOOGLE AUTH
@@ -1006,10 +994,6 @@ function backToSelector() {
   selectedWorkout = null;
 }
 
-function isCheckbox(key, n) {
-  return WO_CHECKBOX_EX[key] && WO_CHECKBOX_EX[key].indexOf(n) !== -1;
-}
-
 function renderExercises(key, exercises) {
   const list = document.getElementById('exercise-list');
   list.innerHTML = '';
@@ -1019,17 +1003,25 @@ function renderExercises(key, exercises) {
     div.id = 'ex-' + ex.n;
 
     let inputHTML = '';
-    if (isCheckbox(key, ex.n)) {
-      inputHTML = '<div style="display:flex;align-items:center;justify-content:space-between;margin-top:0.5rem;">' +
+    if (ex.numSets === 0) {
+      // Checkbox exercise
+      inputHTML = '<div style="display:flex;align-items:center;justify-content:space-between;margin-top:0.75rem;">' +
         '<span style="font-size:0.75rem;color:var(--muted);">Completato</span>' +
         '<button class="toggle" id="ex-toggle-' + ex.n + '" onclick="toggleEx(' + ex.n + ')"></button>' +
         '</div>';
     } else {
-      inputHTML = '<div class="ex-input-row" style="margin-top:0.5rem;">' +
-        '<div><input type="number" id="ex-kg-' + ex.n + '" placeholder="kg" step="0.5"><span class="ex-input-label">Peso (kg)</span></div>' +
-        '<div style="font-size:1.2rem;color:var(--muted);align-self:center;padding-top:0.2rem;">×</div>' +
-        '<div><input type="number" id="ex-reps-' + ex.n + '" placeholder="reps"><span class="ex-input-label">Reps</span></div>' +
-        '</div>';
+      // Multiple set inputs — one field per set
+      inputHTML = '<div style="margin-top:0.75rem;">';
+      inputHTML += '<div style="font-size:0.65rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:0.4rem;">Peso per serie (kg)</div>';
+      inputHTML += '<div style="display:flex;gap:0.4rem;flex-wrap:wrap;">';
+      for (var s = 1; s <= ex.numSets; s++) {
+        inputHTML += '<div style="text-align:center;">' +
+          '<input type="number" id="ex-s' + s + '-' + ex.n + '" placeholder="—" step="0.5" ' +
+          'style="width:58px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:0.5rem 0.25rem;color:var(--text);font-family:DM Mono,monospace;font-size:0.9rem;outline:none;text-align:center;">' +
+          '<div style="font-size:0.6rem;color:var(--muted);margin-top:0.2rem;">S' + s + '</div>' +
+          '</div>';
+      }
+      inputHTML += '</div></div>';
     }
 
     div.innerHTML =
@@ -1038,6 +1030,15 @@ function renderExercises(key, exercises) {
       '<div class="ex-meta"><span class="ex-tag">' + ex.sets + '</span><span class="ex-tag">⏱ ' + ex.pause + '</span></div>' +
       inputHTML;
     list.appendChild(div);
+
+    // Focus border on weight inputs
+    for (var s = 1; s <= ex.numSets; s++) {
+      var inp = document.getElementById('ex-s' + s + '-' + ex.n);
+      if (inp) {
+        inp.addEventListener('focus', function() { this.style.borderColor = 'var(--accent)'; });
+        inp.addEventListener('blur', function() { this.style.borderColor = 'var(--border)'; });
+      }
+    }
   });
 }
 
@@ -1053,24 +1054,19 @@ async function loadWorkoutData(key) {
     if (!data || !data.values) { setStatus('wo', 'ok', 'Nessun dato per W' + currentWeek); return; }
 
     wo.exercises.forEach((ex, idx) => {
-      const val = data.values[idx] ? (data.values[idx][0] + '') : '';
-      if (isCheckbox(key, ex.n)) {
+      const val = (data.values[idx] ? data.values[idx][0] : '') + '';
+      if (ex.numSets === 0) {
+        // Checkbox
         const btn = document.getElementById('ex-toggle-' + ex.n);
         if (btn) { if (val === 'TRUE') btn.classList.add('on'); else btn.classList.remove('on'); }
       } else {
-        if (!val) return;
-        // Try to parse "50kg x 8" or "50 x 8" formats
-        const parts = val.toString().split(/[xX×]/);
-        if (parts.length >= 2) {
-          const kgVal = parts[0].toString().replace(/[^0-9.]/g, '').trim();
-          const repsVal = parts[1].toString().replace(/[^0-9]/g, '').trim();
-          const kgEl = document.getElementById('ex-kg-' + ex.n);
-          const repsEl = document.getElementById('ex-reps-' + ex.n);
-          if (kgEl && kgVal) kgEl.value = kgVal;
-          if (repsEl && repsVal) repsEl.value = repsVal;
-        } else {
-          const kgEl = document.getElementById('ex-kg-' + ex.n);
-          if (kgEl && val) kgEl.value = val.toString().replace(/[^0-9.]/g, '');
+        if (!val || val === 'undefined') return;
+        // Parse "30/40/40/50" format — one value per set
+        const parts = val.split('/');
+        for (var s = 1; s <= ex.numSets; s++) {
+          const inp = document.getElementById('ex-s' + s + '-' + ex.n);
+          const v = parts[s-1] ? parts[s-1].toString().replace(/[^0-9.]/g, '').trim() : '';
+          if (inp && v) inp.value = v;
         }
       }
     });
@@ -1101,15 +1097,21 @@ async function saveWorkout() {
     wo.exercises.forEach((ex, idx) => {
       const row = startRow + idx;
       let val = '';
-      if (isCheckbox(selectedWorkout, ex.n)) {
+      if (ex.numSets === 0) {
+        // Checkbox
         const toggle = document.getElementById('ex-toggle-' + ex.n);
         val = toggle && toggle.classList.contains('on') ? 'TRUE' : 'FALSE';
       } else {
-        const kg = document.getElementById('ex-kg-' + ex.n);
-        const reps = document.getElementById('ex-reps-' + ex.n);
-        const kgVal = kg ? kg.value.trim() : '';
-        const repsVal = reps ? reps.value.trim() : '';
-        val = kgVal && repsVal ? kgVal + 'kg x ' + repsVal : (kgVal || repsVal || '');
+        // Collect per-set values and join with "/"
+        var parts = [];
+        for (var s = 1; s <= ex.numSets; s++) {
+          const inp = document.getElementById('ex-s' + s + '-' + ex.n);
+          parts.push(inp && inp.value.trim() ? inp.value.trim() : '');
+        }
+        // Only save if at least one set has data
+        if (parts.some(function(p) { return p !== ''; })) {
+          val = parts.join('/');
+        }
       }
       updates.push({ range: SHEET_WO + '!' + colLetter + row, values: [[val]] });
     });
